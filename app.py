@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html, Input, Output, callback
+from dash import dcc, html, Input, Output, callback, State
 import plotly.graph_objects as go
 import plotly.express as px
 import fastf1
@@ -16,10 +16,40 @@ app = dash.Dash(__name__)
 # Expose Flask server for Gunicorn
 server = app.server
 
+# Define CSS styles for light and dark themes
+light_theme = {
+    'backgroundColor': '#ffffff',
+    'color': '#000000',
+    'cardBackground': '#f8f9fa',
+    'borderColor': '#dee2e6'
+}
+
+dark_theme = {
+    'backgroundColor': '#1a1a1a',
+    'color': '#ffffff',
+    'cardBackground': '#2d2d2d',
+    'borderColor': '#495057'
+}
+
 # Define app layout
-app.layout = html.Div([
-    html.H1("F1 Telemetry Analysis Dashboard", 
-            style={'textAlign': 'center', 'marginBottom': 30}),
+app.layout = html.Div(id='main-container', children=[
+    # Store for theme state
+    dcc.Store(id='theme-store', data='light'),
+    
+    # Header with title and theme toggle
+    html.Div([
+        html.H1("F1 Telemetry Analysis Dashboard", 
+                style={'textAlign': 'center', 'marginBottom': 30, 'flex': '1'}),
+        html.Div([
+            html.Label("🌙 Dark Mode", style={'marginRight': '10px'}),
+            dcc.Checklist(
+                id='theme-toggle',
+                options=[{'label': '', 'value': 'dark'}],
+                value=[],
+                style={'display': 'inline-block'}
+            )
+        ], style={'position': 'absolute', 'top': '20px', 'right': '20px'})
+    ], style={'position': 'relative', 'marginBottom': '20px'}),
     
     # Controls section
     html.Div([
@@ -128,11 +158,14 @@ def update_drivers(year, race, session):
     Input('year-dropdown', 'value'),
     Input('race-dropdown', 'value'),
     Input('session-dropdown', 'value'),
-    Input('driver-dropdown', 'value')
+    Input('driver-dropdown', 'value'),
+    Input('theme-store', 'data')
 )
-def update_analysis(year, race, session, selected_drivers):
+def update_analysis(year, race, session, selected_drivers, theme):
     if not selected_drivers:
         empty_fig = go.Figure()
+        theme_settings = get_plotly_theme(theme)
+        empty_fig.update_layout(**theme_settings['layout'])
         return "Please select drivers to analyze.", empty_fig, empty_fig
     
     try:
@@ -209,6 +242,8 @@ def update_analysis(year, race, session, selected_drivers):
                 ))
                 first_trace = False
         
+        # Apply theme to track figure
+        theme_settings = get_plotly_theme(theme)
         track_fig.update_layout(
             title=f"Track Map - Fastest Laps Comparison",
             xaxis_title="Track Position X (m)",
@@ -223,7 +258,8 @@ def update_analysis(year, race, session, selected_drivers):
                 xanchor="center",
                 x=0.5
             ),
-            margin=dict(l=50, r=200, t=80, b=100)
+            margin=dict(l=50, r=200, t=80, b=100),
+            **theme_settings['layout']
         )
         
         # Create speed comparison
@@ -299,7 +335,8 @@ def update_analysis(year, race, session, selected_drivers):
                 xanchor="right",
                 x=1
             ),
-            margin=dict(l=50, r=50, t=80, b=50)
+            margin=dict(l=50, r=50, t=80, b=50),
+            **theme_settings['layout']
         )
         
         return summary, track_fig, speed_fig
@@ -312,7 +349,55 @@ def update_analysis(year, race, session, selected_drivers):
             xref="paper", yref="paper",
             x=0.5, y=0.5, xanchor='center', yanchor='middle'
         )
+        # Apply theme to error figures
+        theme_settings = get_plotly_theme(theme)
+        empty_fig.update_layout(**theme_settings['layout'])
         return error_msg, empty_fig, empty_fig
+
+# Theme management callbacks
+@callback(
+    Output('theme-store', 'data'),
+    Input('theme-toggle', 'value')
+)
+def update_theme_store(toggle_value):
+    return 'dark' if 'dark' in toggle_value else 'light'
+
+@callback(
+    Output('main-container', 'style'),
+    Input('theme-store', 'data')
+)
+def update_theme_styles(theme):
+    current_theme = dark_theme if theme == 'dark' else light_theme
+    return {
+        'backgroundColor': current_theme['backgroundColor'],
+        'color': current_theme['color'],
+        'minHeight': '100vh',
+        'padding': '20px',
+        'fontFamily': 'Arial, sans-serif'
+    }
+
+# Update chart themes based on selected theme
+def get_plotly_theme(theme):
+    if theme == 'dark':
+        return {
+            'layout': {
+                'plot_bgcolor': '#2d2d2d',
+                'paper_bgcolor': '#1a1a1a',
+                'font': {'color': '#ffffff'},
+                'xaxis': {'gridcolor': '#555555', 'color': '#ffffff'},
+                'yaxis': {'gridcolor': '#555555', 'color': '#ffffff'}
+            }
+        }
+    else:
+        return {
+            'layout': {
+                'plot_bgcolor': '#ffffff',
+                'paper_bgcolor': '#ffffff',
+                'font': {'color': '#000000'},
+                'xaxis': {'gridcolor': '#dddddd', 'color': '#000000'},
+                'yaxis': {'gridcolor': '#dddddd', 'color': '#000000'}
+            }
+        }
 
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8050, debug=True)
