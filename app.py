@@ -92,6 +92,11 @@ app.layout = html.Div([
             # Speed comparison
             html.Div([
                 dcc.Graph(id='speed-comparison')
+            ]),
+
+            # Tire strategy visualization
+            html.Div([
+                dcc.Graph(id='tire-strategy')
             ])
         ]
     )
@@ -125,6 +130,7 @@ def update_drivers(year, race, session):
     Output('lap-summary', 'children'),
     Output('track-visualization', 'figure'),
     Output('speed-comparison', 'figure'),
+    Output('tire-strategy', 'figure'),
     Input('year-dropdown', 'value'),
     Input('race-dropdown', 'value'),
     Input('session-dropdown', 'value'),
@@ -133,7 +139,7 @@ def update_drivers(year, race, session):
 def update_analysis(year, race, session, selected_drivers):
     if not selected_drivers:
         empty_fig = go.Figure()
-        return "Please select drivers to analyze.", empty_fig, empty_fig
+        return "Please select drivers to analyze.", empty_fig, empty_fig, empty_fig
     
     try:
         # Load session data
@@ -301,8 +307,128 @@ def update_analysis(year, race, session, selected_drivers):
             ),
             margin=dict(l=50, r=50, t=80, b=50)
         )
-        
-        return summary, track_fig, speed_fig
+
+        # Create tire strategy visualization
+        tire_fig = go.Figure()
+
+        # Define tire compound colors
+        compound_colors = {
+            'SOFT': '#FF3333',      # Red
+            'MEDIUM': '#FFF200',    # Yellow
+            'HARD': '#EBEBEB',      # White/Light gray
+            'INTERMEDIATE': '#39B54A',  # Green
+            'WET': '#00AEEF',       # Blue
+            'UNKNOWN': '#CCCCCC',   # Gray
+            'TEST-UNKNOWN': '#CCCCCC'  # Gray
+        }
+
+        # Get max lap number for x-axis
+        max_lap = laps['LapNumber'].max()
+
+        # Process each selected driver
+        for idx, driver in enumerate(selected_drivers):
+            driver_laps = laps[laps['Driver'] == driver].copy()
+
+            if driver_laps.empty:
+                continue
+
+            # Sort by lap number
+            driver_laps = driver_laps.sort_values('LapNumber')
+
+            # Group laps by stint to create bars
+            current_stint = None
+            stint_start = None
+            stint_compound = None
+
+            for _, lap in driver_laps.iterrows():
+                lap_num = lap['LapNumber']
+                stint_num = lap['Stint']
+                compound = lap['Compound'] if pd.notna(lap['Compound']) else 'UNKNOWN'
+
+                # Start new stint
+                if current_stint != stint_num:
+                    # Draw previous stint if exists
+                    if current_stint is not None and stint_start is not None:
+                        stint_length = lap_num - stint_start
+                        tire_fig.add_trace(go.Bar(
+                            name=f"{driver} - {stint_compound}",
+                            x=[stint_length],
+                            y=[driver],
+                            base=stint_start,
+                            orientation='h',
+                            marker=dict(
+                                color=compound_colors.get(stint_compound, '#CCCCCC'),
+                                line=dict(color='black', width=1)
+                            ),
+                            hovertemplate=f"<b>{driver}</b><br>" +
+                                        f"Compound: {stint_compound}<br>" +
+                                        f"Laps: {stint_start:.0f}-{lap_num-1:.0f}<br>" +
+                                        f"Stint Length: {stint_length:.0f} laps<extra></extra>",
+                            showlegend=False
+                        ))
+
+                    # Start new stint
+                    current_stint = stint_num
+                    stint_start = lap_num
+                    stint_compound = compound
+
+            # Draw final stint
+            if current_stint is not None and stint_start is not None:
+                final_lap = driver_laps['LapNumber'].max()
+                stint_length = final_lap - stint_start + 1
+                tire_fig.add_trace(go.Bar(
+                    name=f"{driver} - {stint_compound}",
+                    x=[stint_length],
+                    y=[driver],
+                    base=stint_start,
+                    orientation='h',
+                    marker=dict(
+                        color=compound_colors.get(stint_compound, '#CCCCCC'),
+                        line=dict(color='black', width=1)
+                    ),
+                    hovertemplate=f"<b>{driver}</b><br>" +
+                                f"Compound: {stint_compound}<br>" +
+                                f"Laps: {stint_start:.0f}-{final_lap:.0f}<br>" +
+                                f"Stint Length: {stint_length:.0f} laps<extra></extra>",
+                    showlegend=False
+                ))
+
+        # Add legend for tire compounds (only show used compounds)
+        used_compounds = laps[laps['Driver'].isin(selected_drivers)]['Compound'].dropna().unique()
+        for compound in sorted(used_compounds):
+            if compound in compound_colors:
+                tire_fig.add_trace(go.Bar(
+                    name=compound.title(),
+                    x=[0],
+                    y=[None],
+                    marker=dict(color=compound_colors[compound]),
+                    showlegend=True
+                ))
+
+        tire_fig.update_layout(
+            title="Tire Strategy - Stint Analysis",
+            xaxis_title="Lap Number",
+            yaxis_title="Driver",
+            barmode='stack',
+            height=max(300, len(selected_drivers) * 80),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                title="Tire Compound"
+            ),
+            xaxis=dict(
+                range=[0, max_lap + 2],
+                dtick=5
+            ),
+            margin=dict(l=100, r=50, t=80, b=50),
+            hovermode='closest'
+        )
+
+        return summary, track_fig, speed_fig, tire_fig
         
     except Exception as e:
         error_msg = f"Error loading data: {str(e)}"
@@ -312,7 +438,7 @@ def update_analysis(year, race, session, selected_drivers):
             xref="paper", yref="paper",
             x=0.5, y=0.5, xanchor='center', yanchor='middle'
         )
-        return error_msg, empty_fig, empty_fig
+        return error_msg, empty_fig, empty_fig, empty_fig
 
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8050, debug=True)
