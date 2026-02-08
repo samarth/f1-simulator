@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import CORS_ORIGINS
-from .routers import races, drivers, telemetry, strategy, simulate
+from .routers import races, drivers, strategy, simulate
 
-app = FastAPI(title="F1 Simulator API", version="1.0.0")
+app = FastAPI(title="F1 Strategy Simulator API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,7 +16,6 @@ app.add_middleware(
 
 app.include_router(races.router)
 app.include_router(drivers.router)
-app.include_router(telemetry.router)
 app.include_router(strategy.router)
 app.include_router(simulate.router)
 

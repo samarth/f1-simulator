@@ -6,6 +6,8 @@ from ..services.strategy_service import (
     build_degradation_model,
     get_pit_stop_stats,
     get_driver_actual_strategy,
+    get_weather_data,
+    get_fuel_effect_data,
 )
 
 router = APIRouter()
@@ -13,10 +15,29 @@ router = APIRouter()
 
 @router.get("/api/degradation")
 def fetch_degradation(year: int = Query(...), race: str = Query(...)):
+    """Get tire degradation curves with fuel correction, weather, and fuel effect data."""
     session = load_session(year, race, "R")
-    deg_data = get_race_degradation_data(session)
-    models = build_degradation_model(deg_data)
-    return {"compounds": deg_data, "models": models}
+    
+    # Get total race laps for fuel calculation
+    total_laps = int(session.laps["LapNumber"].max()) if not session.laps.empty else 57
+    
+    # Get degradation data for visualization (raw data grouped by tyre life)
+    deg_data = get_race_degradation_data(session, fuel_corrected=False)
+    
+    # Get per-stint degradation models (more accurate, avoids fuel confounding)
+    models = build_degradation_model(session)
+    
+    # Get weather and fuel info
+    weather = get_weather_data(session)
+    fuel_effect = get_fuel_effect_data(total_laps)
+    
+    return {
+        "compounds": deg_data,
+        "models": models,
+        "weather": weather,
+        "fuel_effect": fuel_effect,
+        "total_laps": total_laps,
+    }
 
 
 @router.get("/api/pit-stats")

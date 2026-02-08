@@ -43,11 +43,26 @@ export default function CumulativeGapChart({ simulation, driver }: Props) {
       .call(d3.axisLeft(yScale).ticks(8).tickSize(-innerW).tickFormat(() => ''))
       .call((g) => { g.selectAll('line').attr('stroke', '#333'); g.select('.domain').remove(); });
 
-    // Zero line
+    // Zero line with label
     g.append('line')
       .attr('x1', 0).attr('x2', innerW)
       .attr('y1', yScale(0)).attr('y2', yScale(0))
-      .attr('stroke', '#888').attr('stroke-width', 1);
+      .attr('stroke', '#888').attr('stroke-width', 1.5);
+
+    // Shaded zones
+    const zeroY = yScale(0);
+    
+    // Red zone above (slower)
+    g.append('rect')
+      .attr('x', 0).attr('y', 0)
+      .attr('width', innerW).attr('height', zeroY)
+      .attr('fill', '#FF6B6B').attr('opacity', 0.03);
+    
+    // Green zone below (faster)  
+    g.append('rect')
+      .attr('x', 0).attr('y', zeroY)
+      .attr('width', innerW).attr('height', innerH - zeroY)
+      .attr('fill', '#4ADE80').attr('opacity', 0.03);
 
     // Area fill
     const area = d3.area<{ lap: number; gap: number }>()
@@ -59,7 +74,7 @@ export default function CumulativeGapChart({ simulation, driver }: Props) {
     g.append('path')
       .datum(data)
       .attr('d', area)
-      .attr('fill', 'rgba(255, 215, 0, 0.1)')
+      .attr('fill', 'rgba(255, 215, 0, 0.15)')
       .attr('stroke', 'none');
 
     // Line
@@ -94,21 +109,31 @@ export default function CumulativeGapChart({ simulation, driver }: Props) {
       .attr('transform', `translate(16, ${margin.top + innerH / 2}) rotate(-90)`)
       .attr('text-anchor', 'middle')
       .attr('fill', '#aaa').style('font-size', '12px')
-      .text('Time Difference (seconds)');
+      .text('Gap to Actual (seconds)');
 
-    svg.append('text')
-      .attr('x', margin.left + innerW - 5).attr('y', margin.top + 15)
+    // Zone labels
+    g.append('text')
+      .attr('x', innerW - 5).attr('y', 15)
       .attr('text-anchor', 'end')
-      .attr('fill', '#888').style('font-size', '11px')
-      .text("+ = you're slower");
+      .attr('fill', '#FF6B6B').style('font-size', '10px').style('font-weight', 'bold')
+      .text('YOU\'RE SLOWER ↑');
+    
+    g.append('text')
+      .attr('x', innerW - 5).attr('y', innerH - 8)
+      .attr('text-anchor', 'end')
+      .attr('fill', '#4ADE80').style('font-size', '10px').style('font-weight', 'bold')
+      .text('YOU\'RE FASTER ↓');
 
   }, [simulation, driver]);
 
   return (
     <div className="bg-surface-700 rounded-lg p-4">
-      <h3 className="text-base font-display font-bold mb-3 text-gray-200">
-        Cumulative Time Gap vs {driver}
+      <h3 className="text-base font-display font-bold mb-1 text-gray-200">
+        Cumulative Time Gap
       </h3>
+      <p className="text-xs text-gray-500 mb-3">
+        Running total of time difference vs {driver}'s actual race. Shows where you gained or lost time.
+      </p>
       <svg ref={svgRef} className="w-full" style={{ maxHeight: '350px' }} />
     </div>
   );

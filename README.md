@@ -1,216 +1,88 @@
-# F1 Telemetry Analysis Dashboard
+# F1 Strategy Simulator
 
-A containerized web application for interactive Formula 1 telemetry analysis using FastF1 data. Analyze driver performance, compare lap times, and visualize racing lines with speed data.
+A web app for learning Formula 1 race strategy. Pick a real race, plan your own pit stop strategy, and see how your choices would have played out compared to what actually happened.
+
+## What You'll Learn
+
+- **Tire degradation** — soft tires are fast but wear quickly, hard tires are slow but last
+- **Pit stop math** — is a 2-stop strategy worth the extra ~25 seconds in the pits?
+- **Strategy trade-offs** — when is staying out worth it vs pitting early?
 
 ## Features
 
-- **Interactive Driver Comparison**: Select multiple drivers and compare their fastest laps
-- **Dynamic Race Selection**: Choose from different years, races, and sessions
-- **Speed-Colored Track Maps**: Visualize racing lines with speed color coding
-- **Speed Trace Analysis**: Compare speed differences along track distance
-- **Containerized Deployment**: Run anywhere Docker is supported
+- Real F1 data via FastF1
+- Interactive tire degradation charts (D3.js)
+- Visual stint planner
+- Lap-by-lap simulation comparison
+- Cumulative gap visualization
 
 ## Quick Start
 
-### Option 1: Docker Run (Simplest)
-
-```bash
-# Build the container
-docker build -t f1-telemetry-app .
-
-# Run the application
-docker run -p 8050:8050 -v $(pwd)/cache:/app/cache f1-telemetry-app
-```
-
-Visit `http://localhost:8050` in your browser.
-
-### Option 2: Docker Compose (Recommended)
-
-```bash
-# Start the application
-docker-compose up --build
-
-# For production with nginx proxy
-docker-compose --profile production up --build
-```
-
-### Option 3: Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-python app.py
-```
-
-## Usage
-
-1. **Select Session**: Choose year, race, and session type from the dropdowns
-2. **Pick Drivers**: Select 1-3 drivers to compare from the available list
-3. **Analyze Data**: View interactive track maps and speed comparisons
-4. **Explore**: Hover over data points for detailed telemetry information
-
-## Deployment Options
-
 ### Local Development
+
 ```bash
-docker run -p 8050:8050 f1-telemetry-app
+# Backend
+cd backend
+source ../.venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
-### Cloud Platforms
+Frontend runs at `http://localhost:5173`, proxies `/api` to backend.
 
-#### AWS ECS/Fargate
+### Docker
+
 ```bash
-# Tag for ECR
-docker tag f1-telemetry-app:latest your-account.dkr.ecr.region.amazonaws.com/f1-telemetry-app:latest
-
-# Push to ECR
-docker push your-account.dkr.ecr.region.amazonaws.com/f1-telemetry-app:latest
+docker-compose up --build
 ```
 
-#### Google Cloud Run
-```bash
-# Tag for GCR
-docker tag f1-telemetry-app:latest gcr.io/your-project/f1-telemetry-app:latest
+App runs at `http://localhost` (nginx serves frontend, proxies API).
 
-# Deploy to Cloud Run
-gcloud run deploy f1-telemetry-app \
-  --image gcr.io/your-project/f1-telemetry-app:latest \
-  --platform managed \
-  --port 8050
-```
+## How It Works
 
-#### Railway
-```bash
-# Connect to Railway (one-time setup)
-railway login
-railway link your-project
+1. **Pick a race** — year and grand prix
+2. **Pick your driver** — who are you engineering for?
+3. **See the data** — tire degradation curves, pit stop time loss
+4. **Plan your strategy** — add stints, choose compounds, set lap counts
+5. **Simulate** — see lap-by-lap comparison vs actual race result
 
-# Deploy
-railway up
-```
+## Tech Stack
 
-### Self-Hosted/On-Premises
+- **Backend**: FastAPI + FastF1
+- **Frontend**: React + Vite + D3.js + Tailwind CSS v4
+- **Data**: Official F1 timing data via FastF1 library
 
-#### Kubernetes Deployment
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: f1-telemetry-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: f1-telemetry-app
-  template:
-    metadata:
-      labels:
-        app: f1-telemetry-app
-    spec:
-      containers:
-      - name: f1-telemetry-app
-        image: f1-telemetry-app:latest
-        ports:
-        - containerPort: 8050
-        volumeMounts:
-        - name: cache-volume
-          mountPath: /app/cache
-      volumes:
-      - name: cache-volume
-        persistentVolumeClaim:
-          claimName: f1-cache-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: f1-telemetry-service
-spec:
-  selector:
-    app: f1-telemetry-app
-  ports:
-  - port: 80
-    targetPort: 8050
-  type: LoadBalancer
-```
+## Project Structure
 
-## Environment Variables
-
-- `FASTF1_CACHE_DIR`: Directory for FastF1 data cache (default: `/app/cache`)
-- `PYTHONUNBUFFERED`: Enable Python output buffering (set to `1`)
-
-## Data Caching
-
-The application caches F1 data locally to improve performance:
-
-- **Local Development**: Cache stored in `./cache/` directory
-- **Docker**: Mount volume for persistent cache: `-v $(pwd)/cache:/app/cache`
-- **Production**: Use persistent volumes for cache storage
-
-## Performance Tips
-
-1. **First Load**: Initial data loading takes 30-60 seconds per session
-2. **Cache Persistence**: Always use volume mounting for cache in production
-3. **Memory Usage**: ~500MB RAM per session loaded
-4. **Concurrent Users**: Single worker handles ~10 concurrent users efficiently
-
-## Troubleshooting
-
-### Container Won't Start
-```bash
-# Check logs
-docker logs <container-id>
-
-# Debug interactively
-docker run -it f1-telemetry-app /bin/bash
-```
-
-### Data Loading Issues
-- Ensure internet connectivity for FastF1 API access
-- Check if race/session exists in FastF1 database
-- Verify cache directory permissions
-
-### Performance Issues
-- Increase worker timeout: `--timeout 600`
-- Add more workers: `--workers 2`
-- Use persistent cache volumes
-
-## Development
-
-### Project Structure
 ```
 f1-simulator/
-├── app.py              # Main Dash application
-├── requirements.txt    # Python dependencies
-├── Dockerfile         # Container configuration
-├── docker-compose.yml # Multi-service setup
-├── nginx.conf         # Reverse proxy config
-├── main.py           # Original matplotlib analysis
-└── cache/            # FastF1 data cache
+├── backend/
+│   ├── app/
+│   │   ├── main.py           # FastAPI app
+│   │   ├── routers/          # API endpoints
+│   │   ├── services/         # Business logic
+│   │   └── models/           # Pydantic schemas
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   │   ├── layout/       # Header, SessionSelector
+│   │   │   ├── strategy/     # Core simulator UI
+│   │   │   └── common/       # Shared components
+│   │   ├── api/              # API client
+│   │   └── hooks/            # React hooks
+│   └── package.json
+└── docker-compose.yml
 ```
 
-### Adding New Features
+## Data Notes
 
-1. **New Visualizations**: Add Plotly charts in `app.py`
-2. **Additional Data**: Extend FastF1 queries in callbacks
-3. **UI Improvements**: Modify Dash layout components
-4. **Performance**: Add caching with `@lru_cache` decorator
-
-## License
-
-This project uses FastF1 for F1 data access. Please respect Formula 1 and FIA data usage policies.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Test with Docker locally
-4. Submit a pull request
-
-## Support
-
-For issues related to:
-- **F1 Data**: Check [FastF1 documentation](https://docs.fastf1.dev/)
-- **Dash Framework**: See [Dash documentation](https://dash.plotly.com/)
-- **Container Issues**: Review Docker logs and ensure proper resource allocation
+- First load of a race takes 30-60 seconds (downloading from F1)
+- Subsequent loads are cached (~2 seconds)
+- Cache stored in `backend/cache/`

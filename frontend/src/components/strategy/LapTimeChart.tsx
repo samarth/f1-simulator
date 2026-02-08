@@ -151,9 +151,12 @@ export default function LapTimeChart({ simulation, stints, driver }: Props) {
 
   return (
     <div className="bg-surface-700 rounded-lg p-4">
-      <h3 className="text-base font-display font-bold mb-3 text-gray-200">
-        Lap Time Comparison: Your Strategy vs Actual
+      <h3 className="text-base font-display font-bold mb-1 text-gray-200">
+        Lap Time Comparison
       </h3>
+      <p className="text-xs text-gray-500 mb-3">
+        Each lap's time — lower is faster. Dashed lines show pit stops. Background colors show your tire compounds.
+      </p>
       <svg ref={svgRef} className="w-full" style={{ maxHeight: '450px' }} />
     </div>
   );

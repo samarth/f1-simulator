@@ -1,7 +1,6 @@
 import type {
   RaceInfo,
   DriverInfo,
-  TelemetryResponse,
   DegradationResponse,
   PitStats,
   ActualStrategy,
@@ -31,17 +30,6 @@ export async function fetchDrivers(year: number, race: string, session: string) 
     `${BASE}/drivers?year=${year}&race=${encodeURIComponent(race)}&session=${session}`
   );
   return data.drivers;
-}
-
-export async function fetchTelemetry(
-  year: number,
-  race: string,
-  session: string,
-  drivers: string[]
-): Promise<TelemetryResponse> {
-  return fetchJson<TelemetryResponse>(
-    `${BASE}/telemetry?year=${year}&race=${encodeURIComponent(race)}&session=${session}&drivers=${drivers.join(',')}`
-  );
 }
 
 export async function fetchDegradation(year: number, race: string): Promise<DegradationResponse> {
