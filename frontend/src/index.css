@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-f1-red: #E10600;
+  --color-surface-900: #0F0F0F;
+  --color-surface-800: #1A1A1A;
+  --color-surface-700: #1E1E1E;
+  --color-surface-600: #2D2D2D;
+  --color-surface-500: #333333;
+  --color-surface-400: #444444;
+  --color-compound-soft: #FF3333;
+  --color-compound-medium: #FFC300;
+  --color-compound-hard: #FFFFFF;
+  --color-accent-cyan: #00BFFF;
+  --color-accent-coral: #FF6B6B;
+  --color-accent-gold: #FFD700;
+  --font-display: "Titillium Web", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}

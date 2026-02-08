@@ -73,9 +73,88 @@
     border-radius: 6px;
 }
 
-/* --- Stint Inputs --- */
-.Select-control, .Select-menu-outer {
+/* --- Dropdowns (all Dash versions) --- */
+
+/* The dropdown control (the box you click) */
+.Select-control,
+.dash-dropdown .Select-control {
     background-color: #333 !important;
+    border-color: #555 !important;
+}
+
+/* Selected value text (single select) */
+.Select-value-label,
+.Select-value .Select-value-label,
+.dash-dropdown .Select-value-label,
+.Select--single > .Select-control .Select-value .Select-value-label {
+    color: #fff !important;
+}
+
+/* Placeholder text */
+.Select-placeholder,
+.dash-dropdown .Select-placeholder {
+    color: #aaa !important;
+}
+
+/* Input text when typing/searching */
+.Select-input > input,
+.dash-dropdown .Select-input > input {
+    color: #fff !important;
+}
+
+/* The dropdown menu container */
+.Select-menu-outer,
+.dash-dropdown .Select-menu-outer {
+    background-color: #2a2a2a !important;
+    border: 1px solid #555 !important;
+}
+
+/* Individual menu option items */
+.VirtualizedSelectOption,
+.VirtualizedSelectFocusedOption,
+.Select-option,
+.dash-dropdown .VirtualizedSelectOption {
+    background-color: #2a2a2a !important;
+    color: #fff !important;
+}
+
+/* Hovered / focused option */
+.VirtualizedSelectFocusedOption,
+.VirtualizedSelectOption:hover,
+.Select-option.is-focused,
+.Select-option:hover {
+    background-color: #e10600 !important;
+    color: #fff !important;
+}
+
+/* Selected option */
+.Select-option.is-selected {
+    background-color: #555 !important;
+    color: #fff !important;
+}
+
+/* Multi-value tags (chips) */
+.Select-value,
+.Select--multi .Select-value {
+    background-color: #444 !important;
+    border-color: #666 !important;
+    color: #fff !important;
+}
+
+/* Clear (x) and arrow indicators */
+.Select-clear-zone,
+.Select-arrow-zone,
+.Select-arrow {
+    color: #aaa !important;
+}
+
+/* Remove button on multi-value tags */
+.Select-value-icon {
+    border-right-color: #666 !important;
+}
+.Select-value-icon:hover {
+    background-color: #e10600 !important;
+    color: #fff !important;
 }
 
 /* --- Tab Styling --- */
