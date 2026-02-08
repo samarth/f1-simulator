@@ -94,7 +94,7 @@ export default function StrategyView() {
         fetchActualStrategy(year, race, state.selectedDriver).catch(() => null),
       ]);
 
-      const totalLaps = actual?.total_laps ?? 57;
+      const totalLaps = degradation.total_laps ?? actual?.total_laps ?? 57;
 
       dispatch({
         type: 'SET_RACE_DATA',
@@ -141,8 +141,15 @@ export default function StrategyView() {
     dispatch({ type: 'RESET_SIM' });
   };
 
+  const handleApplySuggestion = (suggestedStints: StintInput[]) => {
+    dispatch({ type: 'SET_STINTS', payload: suggestedStints });
+    dispatch({ type: 'RESET_SIM' });
+  };
+
   const { raceData, stints, simulation } = state;
   const totalPlanned = stints.reduce((sum, s) => sum + (Number(s.laps) || 0), 0);
+  const weather = raceData?.degradation.weather;
+  const fuelEffect = raceData?.degradation.fuel_effect;
 
   return (
     <div>
@@ -181,38 +188,93 @@ export default function StrategyView() {
 
       {raceData && !state.loading && (
         <>
-          <div className="bg-surface-600 rounded-lg p-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <span className="text-gray-400 text-xs block">Race Length</span>
-              <span className="text-white font-mono text-lg">{raceData.totalLaps} laps</span>
-            </div>
-            <div>
-              <span className="text-gray-400 text-xs block">Avg Pit Loss</span>
-              <span className="text-white font-mono text-lg">~{raceData.pitStats.avg_pit_time.toFixed(1)}s</span>
-            </div>
-            <div>
-              <span className="text-gray-400 text-xs block">Compounds Available</span>
-              <div className="flex gap-1 mt-1">
-                {Object.keys(raceData.degradation.compounds).map((c) => (
-                  <CompoundBadge key={c} compound={c} />
-                ))}
+          {/* Race Info Panel */}
+          <div className="bg-surface-600 rounded-lg p-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {/* Race basics */}
+              <div>
+                <span className="text-gray-400 text-xs block">Race Length</span>
+                <span className="text-white font-mono text-lg">{raceData.totalLaps} laps</span>
               </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Avg Pit Loss</span>
+                <span className="text-white font-mono text-lg">~{raceData.pitStats.avg_pit_time.toFixed(1)}s</span>
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Compounds</span>
+                <div className="flex gap-1 mt-1">
+                  {Object.keys(raceData.degradation.compounds).map((c) => (
+                    <CompoundBadge key={c} compound={c} />
+                  ))}
+                </div>
+              </div>
+              
+              {/* Weather */}
+              {weather?.available && (
+                <>
+                  <div>
+                    <span className="text-gray-400 text-xs block">Track Temp</span>
+                    <span className="text-white font-mono text-lg">
+                      {weather.track_temp}°C
+                      {weather.track_temp_min !== weather.track_temp_max && (
+                        <span className="text-gray-500 text-xs ml-1">
+                          ({weather.track_temp_min}–{weather.track_temp_max})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs block">Conditions</span>
+                    <span className="text-white font-mono text-lg">
+                      {weather.rainfall ? '🌧️ Wet' : weather.conditions === 'Hot' ? '☀️ Hot' : '🌤️ Dry'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-xs block">Air / Humidity</span>
+                    <span className="text-white font-mono text-lg">
+                      {weather.air_temp}°C / {weather.humidity}%
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-            <div>
-              <span className="text-gray-400 text-xs block">{state.selectedDriver}'s Actual</span>
-              <div className="flex items-center gap-1 mt-1 flex-wrap">
+
+            {/* Actual Strategy */}
+            <div className="mt-4 pt-4 border-t border-surface-400">
+              <span className="text-gray-400 text-xs block mb-1">{state.selectedDriver}'s Actual Strategy</span>
+              <div className="flex items-center gap-1 flex-wrap">
                 {raceData.actual?.stints.map((s, i) => (
                   <span key={i} className="text-sm">
-                    {i > 0 && <span className="text-gray-500 mx-0.5">&rarr;</span>}
+                    {i > 0 && <span className="text-gray-500 mx-1">→</span>}
                     <CompoundBadge compound={s.compound} />
-                    <span className="text-gray-300 text-xs ml-0.5">({s.laps}L)</span>
+                    <span className="text-gray-300 text-xs ml-1">({s.laps} laps)</span>
                   </span>
                 ))}
               </div>
             </div>
           </div>
 
-          <DegradationChart degradation={raceData.degradation} />
+          {/* Fuel Effect Info */}
+          {fuelEffect && (
+            <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">⛽</span>
+                <div>
+                  <h4 className="text-amber-400 font-semibold text-sm mb-1">Fuel Load Effect</h4>
+                  <p className="text-gray-300 text-sm">
+                    Cars start heavy with fuel and get faster as it burns off. 
+                    Over {raceData.totalLaps} laps, this accounts for <span className="text-amber-400 font-mono">~{fuelEffect.total_fuel_effect.toFixed(1)}s</span> of 
+                    pace improvement ({fuelEffect.fuel_effect_per_lap * 1000}ms per lap).
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    The degradation curves below are fuel-corrected to show true tire wear.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DegradationChart degradation={raceData.degradation} maxLaps={raceData.totalLaps} />
 
           <div className="bg-surface-700 rounded-lg p-5 mb-6">
             <h3 className="text-base font-display font-bold mb-4 text-gray-200">Plan Your Strategy</h3>
@@ -227,7 +289,7 @@ export default function StrategyView() {
               {totalPlanned === 0 ? (
                 <span className="text-gray-500">Enter lap counts (race is {raceData.totalLaps} laps)</span>
               ) : totalPlanned === raceData.totalLaps ? (
-                <span className="text-green-400">Total: {totalPlanned} / {raceData.totalLaps} laps &#10003;</span>
+                <span className="text-green-400">Total: {totalPlanned} / {raceData.totalLaps} laps ✓</span>
               ) : totalPlanned < raceData.totalLaps ? (
                 <span className="text-yellow-400">
                   Total: {totalPlanned} / {raceData.totalLaps} laps ({raceData.totalLaps - totalPlanned} remaining)
@@ -256,6 +318,7 @@ export default function StrategyView() {
                 simulation={simulation}
                 stints={stints}
                 driver={state.selectedDriver}
+                onApplySuggestion={handleApplySuggestion}
               />
               <LapTimeChart
                 simulation={simulation}

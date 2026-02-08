@@ -3,11 +3,12 @@ from fastapi import APIRouter, HTTPException
 from ..models.strategy import SimulateRequest
 from ..services.session_service import load_session
 from ..services.strategy_service import (
-    get_race_degradation_data,
     build_degradation_model,
     get_pit_stop_stats,
     get_driver_actual_strategy,
     simulate_strategy,
+    analyze_stints,
+    find_optimal_strategies,
 )
 
 router = APIRouter()
@@ -30,8 +31,7 @@ def run_simulation(req: SimulateRequest):
     if len(unique_compounds) < 2:
         raise HTTPException(status_code=400, detail="Must use at least 2 different tire compounds.")
 
-    deg_data = get_race_degradation_data(session)
-    models = build_degradation_model(deg_data)
+    models = build_degradation_model(session)
     pit_stats = get_pit_stop_stats(session)
     pit_loss = pit_stats["avg_pit_time"]
 
@@ -53,9 +53,28 @@ def run_simulation(req: SimulateRequest):
             running_diff += user_dict[lap] - actual_dict[lap]
             cumulative_gap.append({"lap": lap, "gap": round(running_diff, 3)})
 
+    # Per-stint analysis
+    stint_analysis = analyze_stints(models, stints_dicts, actual, pit_loss, total_race_laps)
+
+    # Find optimal strategies
+    optimal = find_optimal_strategies(models, pit_loss, total_race_laps)
+    actual_total = actual["total_time"] if actual else user_total
+    suggested = []
+    labels = {1: "Best 1-stop", 2: "Best 2-stop", 3: "Best 3-stop"}
+    for num_stops in sorted(optimal.keys()):
+        total_time, opt_stints = optimal[num_stops]
+        suggested.append({
+            "label": labels.get(num_stops, f"Best {num_stops}-stop"),
+            "stints": [{"compound": s["compound"], "laps": s["laps"]} for s in opt_stints],
+            "total_time": round(total_time, 3),
+            "delta_vs_actual": round(total_time - actual_total, 3),
+        })
+
     return {
         "simulated_laps": sim_results,
         "user_total_time": user_total,
         "actual": actual,
         "cumulative_gap": cumulative_gap,
+        "stint_analysis": stint_analysis,
+        "suggested_strategies": suggested,
     }

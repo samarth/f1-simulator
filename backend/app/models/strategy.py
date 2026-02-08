@@ -79,8 +79,25 @@ class CumulativeGapPoint(BaseModel):
     gap: float
 
 
+class StintAnalysis(BaseModel):
+    stint: int
+    compound: str
+    laps: int
+    delta: float
+    explanation: str
+
+
+class SuggestedStrategy(BaseModel):
+    label: str
+    stints: list[StintInput]
+    total_time: float
+    delta_vs_actual: float
+
+
 class SimulateResponse(BaseModel):
     simulated_laps: list[SimulatedLap]
     user_total_time: float
     actual: ActualStrategyResponse | None
     cumulative_gap: list[CumulativeGapPoint]
+    stint_analysis: list[StintAnalysis]
+    suggested_strategies: list[SuggestedStrategy]

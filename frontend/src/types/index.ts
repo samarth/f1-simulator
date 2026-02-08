@@ -11,43 +11,6 @@ export interface DriverInfo {
   team: string;
 }
 
-export interface TrackPoint {
-  x: number;
-  y: number;
-  speed: number;
-}
-
-export interface SpeedPoint {
-  distance: number;
-  speed: number;
-}
-
-export interface DriverTelemetry {
-  driver: string;
-  lap_time: string;
-  lap_number: number;
-  color: string;
-  track: TrackPoint[];
-  speed: SpeedPoint[];
-}
-
-export interface SpeedComparisonPoint {
-  distance: number;
-  speeds: Record<string, number>;
-}
-
-export interface SessionInfo {
-  fastest_driver: string;
-  fastest_time: string;
-  fastest_lap_number: number;
-}
-
-export interface TelemetryResponse {
-  session_info: SessionInfo;
-  drivers: DriverTelemetry[];
-  speed_comparison: SpeedComparisonPoint[];
-}
-
 export interface CompoundDegradation {
   tyre_life: number[];
   avg_lap_time: number[];
@@ -60,9 +23,32 @@ export interface DegradationModel {
   deg_rate: number;
 }
 
+export interface WeatherData {
+  available: boolean;
+  air_temp: number | null;
+  track_temp: number | null;
+  humidity: number | null;
+  rainfall: boolean;
+  wind_speed: number | null;
+  conditions: string;
+  track_temp_min: number | null;
+  track_temp_max: number | null;
+}
+
+export interface FuelEffect {
+  laps: number[];
+  fuel_penalty_seconds: number[];
+  fuel_effect_per_lap: number;
+  total_fuel_effect: number;
+  description: string;
+}
+
 export interface DegradationResponse {
   compounds: Record<string, CompoundDegradation>;
   models: Record<string, DegradationModel>;
+  weather: WeatherData;
+  fuel_effect: FuelEffect;
+  total_laps: number;
 }
 
 export interface PitStats {
@@ -114,11 +100,28 @@ export interface CumulativeGapPoint {
   gap: number;
 }
 
+export interface StintAnalysis {
+  stint: number;
+  compound: string;
+  laps: number;
+  delta: number;
+  explanation: string;
+}
+
+export interface SuggestedStrategy {
+  label: string;
+  stints: { compound: string; laps: number }[];
+  total_time: number;
+  delta_vs_actual: number;
+}
+
 export interface SimulateResponse {
   simulated_laps: SimulatedLap[];
   user_total_time: number;
   actual: ActualStrategy | null;
   cumulative_gap: CumulativeGapPoint[];
+  stint_analysis: StintAnalysis[];
+  suggested_strategies: SuggestedStrategy[];
 }
 
 export interface StintInput {
