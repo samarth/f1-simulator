@@ -9,6 +9,7 @@ import StintPlanner from './StintPlanner';
 import LapTimeChart from './LapTimeChart';
 import CumulativeGapChart from './CumulativeGapChart';
 import ResultsSummary from './ResultsSummary';
+import F1Explainer from './F1Explainer';
 
 interface RaceData {
   degradation: DegradationResponse;
@@ -153,6 +154,7 @@ export default function StrategyView() {
 
   return (
     <div>
+      <F1Explainer />
       <div className="flex items-end gap-4 mb-6">
         <div className="flex flex-col gap-1">
           <label className="text-sm text-gray-400 font-body">Select Driver</label>
