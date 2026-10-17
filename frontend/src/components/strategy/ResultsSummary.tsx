@@ -41,6 +41,11 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
   }
 
   const actualStops = actual?.pit_laps ?? [];
+  const samePlan = Boolean(
+    actual
+    && stints.length === actual.stints.length
+    && stints.every((stint, index) => stint.compound === actual.stints[index].compound && Number(stint.laps) === actual.stints[index].laps)
+  );
 
   const handleTryStrategy = (suggestion: SuggestedStrategy) => {
     if (!onApplySuggestion) return;
@@ -55,15 +60,23 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
     <div className="bg-surface-600 rounded-lg p-5">
       <h3 className="text-base font-display font-bold mb-4 text-gray-200">Results Summary</h3>
 
+      {simulation.model_fit && (
+        <p className="text-gray-400 text-xs mb-4">{simulation.model_fit.note}</p>
+      )}
+
       {/* Main verdict */}
-      <div className={`rounded-lg p-4 mb-5 text-center ${isFaster ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
-        <span className={`text-2xl font-bold ${isFaster ? 'text-green-400' : 'text-red-400'}`}>
+      <div className={`rounded-lg p-4 mb-5 text-center ${samePlan ? 'bg-surface-700 border border-surface-400' : isFaster ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
+        <span className={`text-2xl font-bold ${samePlan ? 'text-gray-100' : isFaster ? 'text-green-400' : 'text-red-400'}`}>
           {actualTotal > 0 ? (
-            isFaster ? `${absDiff.toFixed(3)}s FASTER!` : `${absDiff.toFixed(3)}s slower`
+            samePlan
+              ? `${absDiff.toFixed(3)}s off the recorded race`
+              : isFaster ? `${absDiff.toFixed(3)}s FASTER!` : `${absDiff.toFixed(3)}s slower`
           ) : 'No comparison available'}
         </span>
         <p className="text-gray-400 text-sm mt-1">
-          {isFaster ? 'Your strategy would have beaten the actual result!' : 'The actual strategy was better this time.'}
+          {samePlan
+            ? `This is ${driver}'s strategy. The gap is the pit model, not a different plan.`
+            : isFaster ? 'Your strategy would have beaten the actual result!' : 'The actual strategy was better this time.'}
         </p>
       </div>
 

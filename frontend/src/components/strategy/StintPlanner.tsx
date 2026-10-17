@@ -2,8 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { COMPOUND_COLORS } from '../../constants/f1';
 import type { StintInput } from '../../types';
 
-const COMPOUNDS = ['SOFT', 'MEDIUM', 'HARD'] as const;
-const COMPOUND_SHORT: Record<string, string> = { SOFT: 'S', MEDIUM: 'M', HARD: 'H' };
+const DEFAULT_COMPOUNDS = ['SOFT', 'MEDIUM', 'HARD'];
+const COMPOUND_SHORT: Record<string, string> = {
+  SOFT: 'S',
+  MEDIUM: 'M',
+  HARD: 'H',
+  INTERMEDIATE: 'I',
+  WET: 'W',
+};
 const MIN_STINT_LAPS = 3;
 const MAX_PIT_STOPS = 4;
 
@@ -11,6 +17,7 @@ interface Props {
   stints: StintInput[];
   onChange: (stints: StintInput[]) => void;
   totalRaceLaps: number;
+  compounds?: string[];
 }
 
 /** Convert StintInput[] to internal model: pit laps and compound per segment. */
@@ -34,7 +41,8 @@ function pitsToStints(pitLaps: number[], compounds: string[], totalLaps: number)
   }));
 }
 
-export default function StintPlanner({ stints, onChange, totalRaceLaps }: Props) {
+export default function StintPlanner({ stints, onChange, totalRaceLaps, compounds: compoundOptions }: Props) {
+  const availableCompounds = compoundOptions && compoundOptions.length > 0 ? compoundOptions : DEFAULT_COMPOUNDS;
   const barRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
 
@@ -101,8 +109,8 @@ export default function StintPlanner({ stints, onChange, totalRaceLaps }: Props)
 
   const cycleCompound = (segmentIndex: number) => {
     const current = compounds[segmentIndex];
-    const idx = COMPOUNDS.indexOf(current as typeof COMPOUNDS[number]);
-    const next = COMPOUNDS[(idx + 1) % COMPOUNDS.length];
+    const idx = availableCompounds.indexOf(current);
+    const next = availableCompounds[(idx + 1) % availableCompounds.length];
     const newCompounds = [...compounds];
     newCompounds[segmentIndex] = next;
     updateFromInternal(pitLaps, newCompounds);

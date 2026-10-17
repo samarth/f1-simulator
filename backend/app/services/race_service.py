@@ -215,8 +215,8 @@ def _build_laps(
         if number is None:
             continue
         stints_by_driver[number].append(row)
-    for stints in stints_by_driver.values():
-        stints.sort(key=lambda row: (row.get("stint_number") or 0, row.get("lap_start") or 0))
+    for number, stints in list(stints_by_driver.items()):
+        stints_by_driver[number] = normalize_stints(stints)
 
     pit_duration: dict[tuple[int, int], float] = {}
     for row in pit_rows:
@@ -281,6 +281,40 @@ def _build_laps(
         return pd.DataFrame(columns=columns)
     frame = pd.DataFrame.from_records(records, columns=columns)
     return frame.sort_values(["Driver", "LapNumber"]).reset_index(drop=True)
+
+
+def normalize_stints(stints: list[dict]) -> list[dict]:
+    """Give each lap to one stint.
+
+    OpenF1 often sets the next stint's ``lap_start`` equal to the previous
+    stint's ``lap_end``. That shared lap is the pit in-lap and keeps the old
+    compound; the new stint starts on the following lap. A stint that sits
+    entirely inside the next one (an aborted start) is dropped.
+    """
+    ordered = sorted(
+        (row for row in stints if row.get("lap_start") is not None),
+        key=lambda row: (row.get("stint_number") or 0, int(row["lap_start"])),
+    )
+    resolved: list[dict] = []
+    for row in ordered:
+        end = row.get("lap_end")
+        current = {
+            **row,
+            "lap_start": int(row["lap_start"]),
+            "lap_end": None if end is None else int(end),
+        }
+        if resolved:
+            previous = resolved[-1]
+            previous_end = previous.get("lap_end")
+            if previous_end is not None and current["lap_start"] <= int(previous_end):
+                if int(previous["lap_start"]) < current["lap_start"] and int(previous_end) - current["lap_start"] <= 1:
+                    current["lap_start"] = int(previous_end) + 1
+                elif int(previous["lap_start"]) >= current["lap_start"]:
+                    resolved.pop()
+        if current["lap_end"] is not None and current["lap_start"] > current["lap_end"]:
+            continue
+        resolved.append(current)
+    return resolved
 
 
 def _stint_for_lap(stints: list[dict], lap_number: int) -> dict | None:

@@ -60,6 +60,30 @@ const initialStints: StintInput[] = [
   { compound: 'HARD', laps: '' },
 ];
 
+function planFromRace(actual: ActualStrategy | null, totalLaps: number, observed: string[]): StintInput[] {
+  const allowed = new Set(observed);
+  if (actual && actual.stints.length > 0 && allowed.size > 0) {
+    const laps = actual.stints.reduce((sum, stint) => sum + stint.laps, 0);
+    const known = actual.stints.every((stint) => allowed.has(stint.compound));
+    if (laps === totalLaps && known) {
+      return actual.stints.map((stint) => ({ compound: stint.compound, laps: stint.laps }));
+    }
+  }
+  if (observed.length === 0) return initialStints;
+  if (observed.length === 1) return [{ compound: observed[0], laps: '' }];
+  return [
+    { compound: observed[0], laps: '' },
+    { compound: observed[1], laps: '' },
+  ];
+}
+
+function pitSourceLabel(source: string | undefined): string {
+  if (source === 'lap_delta' || source === 'field_lap_delta') return 'from in-lap + out-lap';
+  if (source === 'lane_time') return 'from pit-lane time';
+  if (source === 'default') return 'default, no clean stops';
+  return '';
+}
+
 export default function StrategyView() {
   const { year, race } = useSession();
   const [state, dispatch] = useReducer(reducer, {
@@ -102,11 +126,13 @@ export default function StrategyView() {
       ]);
 
       const totalLaps = degradation.total_laps ?? actual?.total_laps ?? 57;
+      const observed = degradation.model_info?.observed_compounds ?? Object.keys(degradation.models);
 
       dispatch({
         type: 'SET_RACE_DATA',
         payload: { degradation, pitStats, actual, totalLaps },
       });
+      dispatch({ type: 'SET_STINTS', payload: planFromRace(actual, totalLaps, observed) });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Could not load race data.';
       dispatch({ type: 'SET_ERROR', payload: message });
@@ -125,8 +151,14 @@ export default function StrategyView() {
     }
 
     const uniqueCompounds = new Set(state.stints.map((s) => s.compound));
-    if (uniqueCompounds.size < 2) {
-      dispatch({ type: 'SET_ERROR', payload: 'Must use at least 2 different tire compounds.' });
+    const minCompounds = state.raceData.degradation.model_info?.min_compounds ?? 2;
+    if (uniqueCompounds.size < minCompounds) {
+      dispatch({
+        type: 'SET_ERROR',
+        payload: minCompounds >= 2
+          ? 'Use at least two different tire compounds.'
+          : 'Choose a compound that was fitted for this race.',
+      });
       return;
     }
 
@@ -159,6 +191,10 @@ export default function StrategyView() {
   const totalPlanned = stints.reduce((sum, s) => sum + (Number(s.laps) || 0), 0);
   const weather = raceData?.degradation.weather;
   const fuelEffect = raceData?.degradation.fuel_effect;
+  const modelInfo = raceData?.degradation.model_info;
+  const observedCompounds = modelInfo?.observed_compounds ?? Object.keys(raceData?.degradation.compounds ?? {});
+  const modelFit = raceData?.actual?.model_fit;
+  const pitHow = pitSourceLabel(raceData?.pitStats.source);
 
   return (
     <div>
@@ -209,6 +245,7 @@ export default function StrategyView() {
               <div>
                 <span className="text-gray-400 text-xs block">Avg Pit Loss</span>
                 <span className="text-white font-mono text-lg">~{raceData.pitStats.avg_pit_time.toFixed(1)}s</span>
+                {pitHow && <span className="text-gray-500 text-xs block">{pitHow}</span>}
               </div>
               <div>
                 <span className="text-gray-400 text-xs block">Compounds</span>
@@ -264,6 +301,17 @@ export default function StrategyView() {
                   </span>
                 ))}
               </div>
+              {modelFit && (
+                <p className="text-gray-400 text-xs mt-2">{modelFit.note}</p>
+              )}
+              {modelInfo?.unmodeled_compounds && modelInfo.unmodeled_compounds.length > 0 && (
+                <p className="text-amber-300/90 text-xs mt-2">
+                  {modelInfo.unmodeled_compounds.join(', ')} showed up in the race but not on enough clean laps to fit, so it is left out.
+                </p>
+              )}
+              {modelInfo?.pace_note && (
+                <p className="text-amber-300/90 text-xs mt-2">{modelInfo.pace_note}</p>
+              )}
             </div>
           </div>
 
@@ -275,12 +323,12 @@ export default function StrategyView() {
                 <div>
                   <h4 className="text-amber-400 font-semibold text-sm mb-1">Fuel Load Effect</h4>
                   <p className="text-gray-300 text-sm">
-                    Cars start heavy with fuel and get faster as it burns off. 
-                    Over {raceData.totalLaps} laps, this accounts for <span className="text-amber-400 font-mono">~{fuelEffect.total_fuel_effect.toFixed(1)}s</span> of 
-                    pace improvement ({fuelEffect.fuel_effect_per_lap * 1000}ms per lap).
+                    Cars start heavy with fuel and get faster as it burns off.
+                    Over {raceData.totalLaps} laps, this accounts for <span className="text-amber-400 font-mono">~{fuelEffect.total_fuel_effect.toFixed(1)}s</span> of
+                    pace improvement ({(fuelEffect.fuel_effect_per_lap * 1000).toFixed(0)}ms per lap).
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
-                    The degradation curves below are fuel-corrected to show true tire wear.
+                    {fuelEffect.description}
                   </p>
                 </div>
               </div>
@@ -296,6 +344,7 @@ export default function StrategyView() {
               stints={stints}
               onChange={handleStintsChange}
               totalRaceLaps={raceData.totalLaps}
+              compounds={observedCompounds}
             />
 
             <div className="mt-3 mb-4 text-sm font-mono">

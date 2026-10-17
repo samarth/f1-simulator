@@ -41,7 +41,7 @@ export default function DegradationChart({ degradation, maxLaps = 50 }: Props) {
     const xMax = Math.max(maxLaps, dataMaxLife + 10);
     
     // Calculate y range including extrapolated values
-    let yMin = d3.min(allTime)!;
+    const yMin = d3.min(allTime)!;
     let yMax = d3.max(allTime)!;
     
     // Check extrapolated values to set y scale
@@ -157,7 +157,7 @@ export default function DegradationChart({ degradation, maxLaps = 50 }: Props) {
       .attr('transform', `translate(16, ${margin.top + innerH / 2}) rotate(-90)`)
       .attr('text-anchor', 'middle')
       .attr('fill', '#aaa').style('font-size', '12px')
-      .text('Lap Time (seconds)');
+      .text('Fuel-corrected lap time (s)');
 
     // Legend (moved to right side)
     const legendG = svg.append('g').attr('transform', `translate(${margin.left + innerW + 15}, ${margin.top + 10})`);
@@ -190,7 +190,7 @@ export default function DegradationChart({ degradation, maxLaps = 50 }: Props) {
       <h3 className="text-base font-display font-bold mb-3 text-gray-200">
         Tire Degradation Curves
         <span className="text-sm font-normal text-gray-500 ml-2">
-          (dashed lines show predicted degradation)
+          (fuel-corrected; dashed lines show the fitted wear)
         </span>
       </h3>
       <div className="overflow-x-auto">

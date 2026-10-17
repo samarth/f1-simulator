@@ -21,6 +21,11 @@ export interface CompoundDegradation {
 export interface DegradationModel {
   base_time: number;
   deg_rate: number;
+  observed?: boolean;
+  sample_laps?: number;
+  delta?: number;
+  typical_life?: number;
+  field_relative?: boolean;
 }
 
 export interface WeatherData {
@@ -41,6 +46,19 @@ export interface FuelEffect {
   fuel_effect_per_lap: number;
   total_fuel_effect: number;
   description: string;
+  source?: string;
+  fuel_corrected?: boolean;
+}
+
+export interface ModelInfo {
+  observed_compounds: string[];
+  unmodeled_compounds: string[];
+  pace_note: string;
+  fuel_source: string;
+  fuel_corrected: boolean;
+  wet: boolean;
+  min_compounds: number;
+  neutral_laps: number;
 }
 
 export interface DegradationResponse {
@@ -49,6 +67,7 @@ export interface DegradationResponse {
   weather: WeatherData;
   fuel_effect: FuelEffect;
   total_laps: number;
+  model_info?: ModelInfo;
 }
 
 export interface PitStats {
@@ -56,6 +75,20 @@ export interface PitStats {
   min_pit_time: number;
   max_pit_time: number;
   num_stops: number;
+  source?: string;
+}
+
+export interface ModelFit {
+  replay_time: number;
+  actual_time: number;
+  residual_seconds: number;
+  residual_per_lap: number;
+  timed_laps: number;
+  green_rmse: number | null;
+  driver_offset: number;
+  pit_loss: number;
+  pit_source: string;
+  note: string;
 }
 
 export interface StintInfo {
@@ -85,6 +118,7 @@ export interface ActualStrategy {
   total_time: number;
   pit_laps: PitLap[];
   total_laps: number;
+  model_fit?: ModelFit | null;
 }
 
 export interface SimulatedLap {
@@ -122,6 +156,7 @@ export interface SimulateResponse {
   cumulative_gap: CumulativeGapPoint[];
   stint_analysis: StintAnalysis[];
   suggested_strategies: SuggestedStrategy[];
+  model_fit?: ModelFit | null;
 }
 
 export interface StintInput {
