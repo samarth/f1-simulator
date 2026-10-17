@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query
 
-from ..services.session_service import load_session
+from ..services.openf1_client import OpenF1Error
+
+from ..services.race_service import load_race
 from ..services.strategy_service import (
     get_race_degradation_data,
     build_degradation_model,
@@ -16,7 +18,7 @@ router = APIRouter()
 @router.get("/api/degradation")
 def fetch_degradation(year: int = Query(...), race: str = Query(...)):
     """Get tire degradation curves with fuel correction, weather, and fuel effect data."""
-    session = load_session(year, race, "R")
+    session = load_race(year, race)
     
     # Get total race laps for fuel calculation
     total_laps = int(session.laps["LapNumber"].max()) if not session.laps.empty else 57
@@ -42,7 +44,7 @@ def fetch_degradation(year: int = Query(...), race: str = Query(...)):
 
 @router.get("/api/pit-stats")
 def fetch_pit_stats(year: int = Query(...), race: str = Query(...)):
-    session = load_session(year, race, "R")
+    session = load_race(year, race)
     return get_pit_stop_stats(session)
 
 
@@ -52,8 +54,8 @@ def fetch_actual_strategy(
     race: str = Query(...),
     driver: str = Query(...),
 ):
-    session = load_session(year, race, "R")
+    session = load_race(year, race)
     result = get_driver_actual_strategy(session, driver)
     if result is None:
-        return {"error": "No data found for driver"}
+        raise OpenF1Error(f"No lap data for {driver} at {race} ({year}).", 404)
     return result

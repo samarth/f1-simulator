@@ -9,13 +9,30 @@ import type {
 
 const BASE = '/api';
 
+async function errorMessage(res: Response): Promise<string> {
+  const body = await res.json().catch(() => ({}));
+  const detail = body?.detail;
+  if (typeof detail === 'string' && detail) return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (typeof item === 'string' ? item : item?.msg))
+      .filter((item): item is string => Boolean(item));
+    if (messages.length > 0) return messages.join(', ');
+  }
+  return res.statusText || 'Request failed';
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || res.statusText);
+    throw new Error(await errorMessage(res));
   }
   return res.json();
+}
+
+export async function fetchYears() {
+  const data = await fetchJson<{ years: number[] }>(`${BASE}/years`);
+  return data.years;
 }
 
 export async function fetchRaces(year: number) {
@@ -66,8 +83,7 @@ export async function postSimulate(
     body: JSON.stringify({ year, race, driver, stints }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || res.statusText);
+    throw new Error(await errorMessage(res));
   }
   return res.json();
 }
