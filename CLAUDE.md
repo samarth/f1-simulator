@@ -68,7 +68,17 @@ Laps, stints, pit stops, drivers, and weather are fetched per race session and j
 `OPENF1_BASE_URL` overrides the API origin (default `https://api.openf1.org/v1`).
 
 ### Degradation Model
-Linear regression: `lap_time = base_time + deg_rate × tyre_life`
+Fuel-corrected linear tire model. Fuel is estimated when a driver runs one compound across two stints, which is when tyre life and fuel can be separated. Otherwise the model uses a standard 40ms per lap. The fit subtracts `fuel × laps_remaining` before regressing `base_time + deg_rate × tyre_life`. Predictions add that fuel back once, so the chart and the simulator agree.
+
+Compounds with fewer than 10 clean laps are left unmodelled. Nothing is invented for a missing compound. A dry pace order that disagrees with soft-medium-hard by more than about 0.15s is reported and left as measured.
+
+Pit loss is the extra time of an in-lap plus the following out-lap versus two racing laps, kept in a 10–40s band. Stationary-only pit durations (~2.5s) and red-flag outliers are not mixed into that number. The loss is added once, on the in-lap. The out-lap is a racing lap.
+
+Safety-car, virtual-safety-car, and red-flag laps use the recorded time. Replaying a driver's own stints anchors green-lap pace to that driver, so the timed-lap total should land within a few seconds of the race. Green-lap RMSE is the scatter around the fit. Pit laps in the replay keep the recorded time.
+
+Suggested strategies use only compounds that were fitted, at least two when two were fitted, and do not run the same compound in consecutive stints. A dry race must use two different dry compounds when two are modelled. A suggestion also has to stay on laps where that compound was actually used, and no longer than the longest stint anyone completed on it.
+
+OpenF1 sometimes starts the next stint on the same lap the previous one ends. That shared lap is the in-lap and stays with the old compound.
 
 ### Compound Colors
 - SOFT: `#FF3333`
