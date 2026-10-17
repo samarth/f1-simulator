@@ -1,11 +1,27 @@
 import numpy as np
 import pandas as pd
 
-from .session_service import load_session
-
 # Fuel effect: approximately 0.055s per lap faster as fuel burns off
 # F1 cars start with ~110kg fuel, burn ~1.8kg/lap, ~0.03s/kg delta
 FUEL_EFFECT_PER_LAP = 0.055  # seconds gained per lap from fuel burn-off
+
+
+def _compound_laps(laps: pd.DataFrame, compound: str) -> pd.DataFrame:
+    if laps.empty or "Compound" not in laps.columns:
+        return laps.iloc[0:0]
+    return laps[laps["Compound"] == compound]
+
+
+def _racing_laps(laps: pd.DataFrame) -> pd.DataFrame:
+    """Timed laps that are not pit-in or pit-out laps."""
+    if laps.empty:
+        return laps
+    mask = laps["LapTime"].notna()
+    if "IsPitOut" in laps.columns:
+        mask = mask & ~laps["IsPitOut"].fillna(False)
+    if "IsPitIn" in laps.columns:
+        mask = mask & ~laps["IsPitIn"].fillna(False)
+    return laps.loc[mask]
 
 
 def get_race_degradation_data(session, fuel_corrected: bool = True) -> dict:
@@ -18,8 +34,8 @@ def get_race_degradation_data(session, fuel_corrected: bool = True) -> dict:
 
     for compound in ["SOFT", "MEDIUM", "HARD"]:
         try:
-            compound_laps = laps.pick_compounds(compound)
-            clean_laps = compound_laps.pick_wo_box().pick_accurate()
+            compound_laps = _compound_laps(laps, compound)
+            clean_laps = _racing_laps(compound_laps)
 
             if "TrackStatus" in clean_laps.columns:
                 clean_laps = clean_laps[
@@ -78,7 +94,7 @@ def build_degradation_model(session) -> dict:
     
     for compound in ["SOFT", "MEDIUM", "HARD"]:
         try:
-            compound_laps = laps.pick_compounds(compound).pick_wo_box().pick_accurate()
+            compound_laps = _racing_laps(_compound_laps(laps, compound))
             if compound_laps.empty:
                 continue
             
@@ -210,17 +226,15 @@ def get_pit_stop_stats(session) -> dict:
     """Extract average pit stop duration from the race."""
     laps = session.laps
     pit_times = []
-    drivers = laps["Driver"].unique()
 
-    for driver in drivers:
-        driver_laps = laps[laps["Driver"] == driver].sort_values("LapNumber")
-        for _, lap in driver_laps.iterrows():
-            if pd.notna(lap.get("PitInTime")) and pd.notna(lap.get("PitOutTime")):
-                pit_duration = (lap["PitOutTime"] - lap["PitInTime"]).total_seconds()
-                if 15 < pit_duration < 60:
-                    pit_times.append(pit_duration)
+    if not laps.empty and "PitDuration" in laps.columns:
+        for duration in laps["PitDuration"].dropna():
+            duration = float(duration)
+            if 15 < duration < 60:
+                pit_times.append(duration)
 
-    if not pit_times:
+    if not pit_times and not laps.empty:
+        drivers = laps["Driver"].unique()
         for driver in drivers:
             driver_laps = laps[laps["Driver"] == driver].sort_values("LapNumber")
             for i in range(1, len(driver_laps)):
@@ -232,7 +246,7 @@ def get_pit_stop_stats(session) -> dict:
                     and cur["Stint"] != prev["Stint"]
                 ):
                     if pd.notna(cur["LapTime"]) and pd.notna(prev["LapTime"]):
-                        avg_clean = laps.pick_wo_box().pick_accurate()
+                        avg_clean = _racing_laps(laps)
                         if not avg_clean.empty:
                             avg_time = avg_clean["LapTime"].dt.total_seconds().mean()
                             pit_loss = cur["LapTime"].total_seconds() - avg_time

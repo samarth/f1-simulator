@@ -3,10 +3,7 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./cache:/app/cache
     environment:
-      - FASTF1_CACHE_DIR=/app/cache
       - CORS_ORIGINS=http://localhost:5173,http://localhost,http://localhost:80
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

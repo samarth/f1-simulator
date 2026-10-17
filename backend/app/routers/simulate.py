@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 
 from ..models.strategy import SimulateRequest
-from ..services.session_service import load_session
+from ..services.openf1_client import OpenF1Error
+from ..services.race_service import load_race
 from ..services.strategy_service import (
     build_degradation_model,
     get_pit_stop_stats,
@@ -16,7 +17,7 @@ router = APIRouter()
 
 @router.post("/api/simulate")
 def run_simulation(req: SimulateRequest):
-    session = load_session(req.year, req.race, "R")
+    session = load_race(req.year, req.race)
     laps = session.laps
     total_race_laps = int(laps["LapNumber"].max())
 
@@ -39,6 +40,11 @@ def run_simulation(req: SimulateRequest):
     sim_results = simulate_strategy(models, stints_dicts, pit_loss, total_race_laps)
 
     actual = get_driver_actual_strategy(session, req.driver)
+    if actual is None:
+        raise OpenF1Error(
+            f"No lap data for {req.driver} at {req.race} ({req.year}).",
+            404,
+        )
 
     user_total = sum(r["time_sec"] for r in sim_results)
 

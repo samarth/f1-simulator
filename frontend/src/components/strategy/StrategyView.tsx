@@ -74,10 +74,16 @@ export default function StrategyView() {
   });
 
   useEffect(() => {
-    if (!race) return;
+    if (!race || !year) return;
+    dispatch({ type: 'SET_DRIVERS', payload: [] });
+    dispatch({ type: 'SET_DRIVER', payload: '' });
+    dispatch({ type: 'SET_ERROR', payload: '' });
     fetchDrivers(year, race, 'R')
       .then((drivers) => dispatch({ type: 'SET_DRIVERS', payload: drivers }))
-      .catch((e) => dispatch({ type: 'SET_ERROR', payload: e.message }));
+      .catch((e: unknown) => {
+        const message = e instanceof Error ? e.message : 'Could not load drivers.';
+        dispatch({ type: 'SET_ERROR', payload: message });
+      });
   }, [year, race]);
 
   const handleLoadRaceData = async () => {
@@ -101,8 +107,9 @@ export default function StrategyView() {
         type: 'SET_RACE_DATA',
         payload: { degradation, pitStats, actual, totalLaps },
       });
-    } catch (e: any) {
-      dispatch({ type: 'SET_ERROR', payload: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not load race data.';
+      dispatch({ type: 'SET_ERROR', payload: message });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -130,8 +137,9 @@ export default function StrategyView() {
       const validStints = state.stints.map((s) => ({ compound: s.compound, laps: Number(s.laps) }));
       const result = await postSimulate(year, race, state.selectedDriver, validStints);
       dispatch({ type: 'SET_SIMULATION', payload: result });
-    } catch (e: any) {
-      dispatch({ type: 'SET_ERROR', payload: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Simulation failed.';
+      dispatch({ type: 'SET_ERROR', payload: message });
     } finally {
       dispatch({ type: 'SET_SIMULATING', payload: false });
     }
@@ -244,6 +252,9 @@ export default function StrategyView() {
             {/* Actual Strategy */}
             <div className="mt-4 pt-4 border-t border-surface-400">
               <span className="text-gray-400 text-xs block mb-1">{state.selectedDriver}'s Actual Strategy</span>
+              {!raceData.actual && (
+                <p className="text-sm text-amber-300">No lap data for this driver in this session.</p>
+              )}
               <div className="flex items-center gap-1 flex-wrap">
                 {raceData.actual?.stints.map((s, i) => (
                   <span key={i} className="text-sm">

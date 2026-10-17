@@ -10,7 +10,7 @@ A web app for learning Formula 1 race strategy. Pick a real race, plan your own 
 
 ## Features
 
-- Real F1 data via FastF1
+- Real F1 data via the OpenF1 API (2023 onward)
 - Interactive tire degradation charts (D3.js)
 - Visual stint planner
 - Lap-by-lap simulation comparison
@@ -53,9 +53,9 @@ App runs at `http://localhost` (nginx serves frontend, proxies API).
 
 ## Tech Stack
 
-- **Backend**: FastAPI + FastF1
+- **Backend**: FastAPI
 - **Frontend**: React + Vite + D3.js + Tailwind CSS v4
-- **Data**: Official F1 timing data via FastF1 library
+- **Data**: [OpenF1](https://openf1.org) (`https://api.openf1.org/v1`)
 
 ## Project Structure
 
@@ -83,6 +83,7 @@ f1-simulator/
 
 ## Data Notes
 
-- First load of a race takes 30-60 seconds (downloading from F1)
-- Subsequent loads are cached (~2 seconds)
-- Cache stored in `backend/cache/`
+- Timing comes from OpenF1. Historical endpoints are free and do not need an API key. Data starts with the 2023 season (there is no 2021 or 2022).
+- The year menu lists every season OpenF1 currently publishes, including a season that is still in progress. A race that has not been run yet returns a clear error instead of an empty chart.
+- The free tier allows about 3 requests per second and 30 per minute. The backend spaces its calls and keeps a short in-memory cache, so opening the same race again is immediate.
+- Set `OPENF1_BASE_URL` if you need to point the backend at a different OpenF1 origin.
