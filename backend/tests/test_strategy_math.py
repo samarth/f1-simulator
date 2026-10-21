@@ -20,6 +20,7 @@ from app.services.strategy_math import (
     simulate_strategy,
     suggestion_is_legal,
     user_plan_problem,
+    with_opening_tyre_age,
 )
 
 
@@ -395,3 +396,32 @@ def test_compared_total_ignores_laps_without_a_recorded_time():
         {"lap": 3, "time_sec": 92.0},
     ]
     assert compared_total(simulated, {1: 90.0, 3: 92.5}) == 182.0
+
+
+def test_pit_loss_is_added_on_the_out_lap():
+    models = {
+        "SOFT": {"base_time": 90.0, "deg_rate": 0.0},
+        "HARD": {"base_time": 91.0, "deg_rate": 0.0},
+    }
+    stints = [{"compound": "SOFT", "laps": 4}, {"compound": "HARD", "laps": 4}]
+    simulated = simulate_strategy(models, stints, 20.0, 8, 0.0)
+    in_lap = simulated[3]
+    out_lap = simulated[4]
+    assert in_lap["is_pit_lap"] is True
+    assert abs(in_lap["time_sec"] - estimate_lap_time(models, "SOFT", 4, 4, 8, 0.0)) < 1e-6
+    assert abs(out_lap["time_sec"] - (estimate_lap_time(models, "HARD", 1, 5, 8, 0.0) + 20.0)) < 1e-6
+
+
+def test_opening_tyre_age_applies_only_to_the_starting_compound():
+    stints = [{"compound": "SOFT", "laps": 10}, {"compound": "HARD", "laps": 10}]
+    aged = with_opening_tyre_age(stints, "SOFT", 3)
+    assert aged[0]["start_tyre_age"] == 3
+    assert "start_tyre_age" not in aged[1]
+    fresh = with_opening_tyre_age(stints, "MEDIUM", 3)
+    assert fresh[0].get("start_tyre_age") is None
+    explicit = with_opening_tyre_age(
+        [{"compound": "SOFT", "laps": 10, "start_tyre_age": 0}, {"compound": "HARD", "laps": 10}],
+        "SOFT",
+        3,
+    )
+    assert explicit[0]["start_tyre_age"] == 0

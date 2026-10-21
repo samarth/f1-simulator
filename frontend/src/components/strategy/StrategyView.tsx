@@ -1,6 +1,6 @@
-import { useReducer, useEffect } from 'react';
-import { useSession } from '../../hooks/useSession';
-import { fetchDrivers, fetchDegradation, fetchPitStats, fetchActualStrategy, postSimulate } from '../../api';
+import { useReducer, useEffect, useRef } from 'react';
+import { useSession } from '../../hooks/sessionContext';
+import { ApiError, fetchDrivers, fetchDegradation, fetchPitStats, fetchActualStrategy, postSimulate } from '../../api';
 import type { DriverInfo, DegradationResponse, PitStats, ActualStrategy, SimulateResponse, StintInput } from '../../types';
 import LoadingOverlay from '../common/LoadingOverlay';
 import CompoundBadge from '../common/CompoundBadge';
@@ -29,9 +29,16 @@ type State = {
   error: string;
 };
 
+const initialStints: StintInput[] = [
+  { compound: 'MEDIUM', laps: '' },
+  { compound: 'HARD', laps: '' },
+];
+
 type Action =
   | { type: 'SET_DRIVERS'; payload: DriverInfo[] }
   | { type: 'SET_DRIVER'; payload: string }
+  | { type: 'RESET_FOR_SELECTION' }
+  | { type: 'CLEAR_LOADED' }
   | { type: 'SET_RACE_DATA'; payload: RaceData }
   | { type: 'SET_STINTS'; payload: StintInput[] }
   | { type: 'SET_SIMULATION'; payload: SimulateResponse }
@@ -43,7 +50,39 @@ type Action =
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_DRIVERS': return { ...state, drivers: action.payload };
-    case 'SET_DRIVER': return { ...state, selectedDriver: action.payload };
+    case 'SET_DRIVER':
+      if (action.payload === state.selectedDriver) return state;
+      return {
+        ...state,
+        selectedDriver: action.payload,
+        raceData: null,
+        stints: initialStints,
+        simulation: null,
+        loading: false,
+        simulating: false,
+        error: '',
+      };
+    case 'RESET_FOR_SELECTION':
+      return {
+        ...state,
+        drivers: [],
+        selectedDriver: '',
+        raceData: null,
+        stints: initialStints,
+        simulation: null,
+        loading: false,
+        simulating: false,
+        error: '',
+      };
+    case 'CLEAR_LOADED':
+      return {
+        ...state,
+        raceData: null,
+        stints: initialStints,
+        simulation: null,
+        loading: false,
+        simulating: false,
+      };
     case 'SET_RACE_DATA': return { ...state, raceData: action.payload, simulation: null };
     case 'SET_STINTS': return { ...state, stints: action.payload };
     case 'SET_SIMULATION': return { ...state, simulation: action.payload };
@@ -54,11 +93,6 @@ function reducer(state: State, action: Action): State {
     default: return state;
   }
 }
-
-const initialStints: StintInput[] = [
-  { compound: 'MEDIUM', laps: '' },
-  { compound: 'HARD', laps: '' },
-];
 
 function planFromRace(actual: ActualStrategy | null, totalLaps: number, observed: string[]): StintInput[] {
   const allowed = new Set(observed);
@@ -86,6 +120,7 @@ function pitSourceLabel(source: string | undefined): string {
 
 export default function StrategyView() {
   const { year, race } = useSession();
+  const loadGeneration = useRef(0);
   const [state, dispatch] = useReducer(reducer, {
     drivers: [],
     selectedDriver: '',
@@ -99,22 +134,29 @@ export default function StrategyView() {
 
   useEffect(() => {
     if (!race || !year) return;
-    dispatch({ type: 'SET_DRIVERS', payload: [] });
-    dispatch({ type: 'SET_DRIVER', payload: '' });
-    dispatch({ type: 'SET_ERROR', payload: '' });
-    fetchDrivers(year, race, 'R')
-      .then((drivers) => dispatch({ type: 'SET_DRIVERS', payload: drivers }))
+    let cancelled = false;
+    loadGeneration.current += 1;
+    dispatch({ type: 'RESET_FOR_SELECTION' });
+    fetchDrivers(year, race)
+      .then((drivers) => {
+        if (!cancelled) dispatch({ type: 'SET_DRIVERS', payload: drivers });
+      })
       .catch((e: unknown) => {
+        if (cancelled) return;
         const message = e instanceof Error ? e.message : 'Could not load drivers.';
         dispatch({ type: 'SET_ERROR', payload: message });
       });
+    return () => { cancelled = true; };
   }, [year, race]);
 
   const handleLoadRaceData = async () => {
-    if (!state.selectedDriver) {
+    const driver = state.selectedDriver;
+    if (!driver) {
       dispatch({ type: 'SET_ERROR', payload: 'Please select a driver.' });
       return;
     }
+    const generation = loadGeneration.current;
+    dispatch({ type: 'CLEAR_LOADED' });
     dispatch({ type: 'SET_LOADING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: '' });
 
@@ -122,8 +164,12 @@ export default function StrategyView() {
       const [degradation, pitStats, actual] = await Promise.all([
         fetchDegradation(year, race),
         fetchPitStats(year, race),
-        fetchActualStrategy(year, race, state.selectedDriver).catch(() => null),
+        fetchActualStrategy(year, race, driver).catch((e: unknown) => {
+          if (e instanceof ApiError && e.status === 404) return null;
+          throw e;
+        }),
       ]);
+      if (generation !== loadGeneration.current) return;
 
       const totalLaps = degradation.total_laps ?? actual?.total_laps ?? 57;
       const observed = degradation.model_info?.observed_compounds ?? Object.keys(degradation.models);
@@ -134,10 +180,13 @@ export default function StrategyView() {
       });
       dispatch({ type: 'SET_STINTS', payload: planFromRace(actual, totalLaps, observed) });
     } catch (e: unknown) {
+      if (generation !== loadGeneration.current) return;
       const message = e instanceof Error ? e.message : 'Could not load race data.';
       dispatch({ type: 'SET_ERROR', payload: message });
     } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+      if (generation === loadGeneration.current) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
     }
   };
 
@@ -162,18 +211,24 @@ export default function StrategyView() {
       return;
     }
 
+    const generation = loadGeneration.current;
+    const driver = state.selectedDriver;
     dispatch({ type: 'SET_SIMULATING', payload: true });
     dispatch({ type: 'SET_ERROR', payload: '' });
 
     try {
       const validStints = state.stints.map((s) => ({ compound: s.compound, laps: Number(s.laps) }));
-      const result = await postSimulate(year, race, state.selectedDriver, validStints);
+      const result = await postSimulate(year, race, driver, validStints);
+      if (generation !== loadGeneration.current) return;
       dispatch({ type: 'SET_SIMULATION', payload: result });
     } catch (e: unknown) {
+      if (generation !== loadGeneration.current) return;
       const message = e instanceof Error ? e.message : 'Simulation failed.';
       dispatch({ type: 'SET_ERROR', payload: message });
     } finally {
-      dispatch({ type: 'SET_SIMULATING', payload: false });
+      if (generation === loadGeneration.current) {
+        dispatch({ type: 'SET_SIMULATING', payload: false });
+      }
     }
   };
 
@@ -204,7 +259,10 @@ export default function StrategyView() {
           <label className="text-sm text-gray-400 font-body">Select Driver</label>
           <select
             value={state.selectedDriver}
-            onChange={(e) => dispatch({ type: 'SET_DRIVER', payload: e.target.value })}
+            onChange={(e) => {
+              loadGeneration.current += 1;
+              dispatch({ type: 'SET_DRIVER', payload: e.target.value });
+            }}
             className="bg-surface-500 text-white border border-surface-400 rounded px-3 py-2 font-body text-sm focus:outline-none focus:border-f1-red min-w-40"
           >
             <option value="">Choose driver...</option>
@@ -290,7 +348,7 @@ export default function StrategyView() {
             <div className="mt-4 pt-4 border-t border-surface-400">
               <span className="text-gray-400 text-xs block mb-1">{state.selectedDriver}'s Actual Strategy</span>
               {!raceData.actual && (
-                <p className="text-sm text-amber-300">No lap data for this driver in this session.</p>
+                <p className="text-sm text-amber-300">No lap data for this driver.</p>
               )}
               <div className="flex items-center gap-1 flex-wrap">
                 {raceData.actual?.stints.map((s, i) => (
@@ -304,10 +362,8 @@ export default function StrategyView() {
               {modelFit && (
                 <p className="text-gray-400 text-xs mt-2">{modelFit.note}</p>
               )}
-              {modelInfo?.unmodeled_compounds && modelInfo.unmodeled_compounds.length > 0 && (
-                <p className="text-amber-300/90 text-xs mt-2">
-                  {modelInfo.unmodeled_compounds.join(', ')} showed up in the race but not on enough clean laps to fit, so it is left out.
-                </p>
+              {modelInfo?.left_out_note && (
+                <p className="text-amber-300/90 text-xs mt-2">{modelInfo.left_out_note}</p>
               )}
               {modelInfo?.pace_note && (
                 <p className="text-amber-300/90 text-xs mt-2">{modelInfo.pace_note}</p>

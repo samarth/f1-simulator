@@ -1,5 +1,4 @@
-import { useSession } from '../../hooks/useSession';
-import { SESSION_OPTIONS } from '../../constants/f1';
+import { useSession } from '../../hooks/sessionContext';
 
 export default function SessionSelector() {
   const {
@@ -7,8 +6,6 @@ export default function SessionSelector() {
     setYear,
     race,
     setRace,
-    session,
-    setSession,
     races,
     years,
     loadingRaces,
@@ -45,19 +42,6 @@ export default function SessionSelector() {
           {loadingRaces && <option>Loading...</option>}
           {races.map((r) => (
             <option key={r.round} value={r.name}>{r.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-sm text-gray-400 font-body">Session</label>
-        <select
-          value={session}
-          onChange={(e) => setSession(e.target.value)}
-          className="bg-surface-500 text-white border border-surface-400 rounded px-3 py-2 font-body text-sm focus:outline-none focus:border-f1-red"
-        >
-          {SESSION_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
       </div>

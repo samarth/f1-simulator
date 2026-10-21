@@ -6,6 +6,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import date
 
 import pandas as pd
 
@@ -43,6 +44,34 @@ _race_cache: dict[int, tuple[float, LoadedRace]] = {}
 def get_years() -> list[int]:
     years = {event.year for event in list_events()}
     return sorted(years, reverse=True)
+
+
+def latest_available_race(today: date | None = None) -> RaceEvent | None:
+    """Newest race whose session date has passed and whose driver list is published.
+
+    OpenF1 lists future seasons as soon as the calendar exists. Those meetings
+    have a race session and no results, so they are not a usable default.
+    """
+    today = today or date.today()
+    candidates = []
+    for event in list_events():
+        if not event.date:
+            continue
+        try:
+            event_date = date.fromisoformat(event.date)
+        except ValueError:
+            continue
+        if event_date <= today:
+            candidates.append(event)
+    candidates.sort(key=lambda event: (event.date, event.round), reverse=True)
+    for event in candidates[:8]:
+        try:
+            drivers = get_drivers(event.year, event.name)
+        except OpenF1Error:
+            continue
+        if drivers:
+            return event
+    return None
 
 
 def get_races(year: int) -> list[dict]:
