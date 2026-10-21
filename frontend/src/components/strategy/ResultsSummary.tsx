@@ -23,10 +23,12 @@ function formatRaceTime(totalSeconds: number): string {
 export default function ResultsSummary({ simulation, stints, driver, onApplySuggestion }: Props) {
   const { user_total_time, actual, stint_analysis, suggested_strategies } = simulation;
   const actualTotal = actual?.total_time ?? 0;
-  const diff = actualTotal > 0 ? user_total_time - actualTotal : 0;
+  const hasComparison = actualTotal > 0;
+  const diff = hasComparison ? user_total_time - actualTotal : 0;
   const absDiff = Math.abs(diff);
   const isFaster = diff < 0;
 
+  const closeFit = hasComparison && absDiff < 0.15;
   const userStops: { lap: number; from: string; to: string }[] = [];
   let stintStart = 0;
   for (let i = 0; i < stints.length - 1; i++) {
@@ -42,7 +44,8 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
 
   const actualStops = actual?.pit_laps ?? [];
   const samePlan = Boolean(
-    actual
+    hasComparison
+    && actual
     && stints.length === actual.stints.length
     && stints.every((stint, index) => stint.compound === actual.stints[index].compound && Number(stint.laps) === actual.stints[index].laps)
   );
@@ -65,18 +68,24 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
       )}
 
       {/* Main verdict */}
-      <div className={`rounded-lg p-4 mb-5 text-center ${samePlan ? 'bg-surface-700 border border-surface-400' : isFaster ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
-        <span className={`text-2xl font-bold ${samePlan ? 'text-gray-100' : isFaster ? 'text-green-400' : 'text-red-400'}`}>
-          {actualTotal > 0 ? (
-            samePlan
-              ? `${absDiff.toFixed(3)}s off the recorded race`
-              : isFaster ? `${absDiff.toFixed(3)}s FASTER!` : `${absDiff.toFixed(3)}s slower`
-          ) : 'No comparison available'}
+      <div className={`rounded-lg p-4 mb-5 text-center ${!hasComparison || samePlan ? 'bg-surface-700 border border-surface-400' : isFaster ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
+        <span className={`text-2xl font-bold ${!hasComparison || samePlan ? 'text-gray-100' : isFaster ? 'text-green-400' : 'text-red-400'}`}>
+          {!hasComparison
+            ? 'No recorded race time'
+            : samePlan && closeFit
+              ? 'Matches the recorded race'
+              : samePlan
+                ? `${absDiff.toFixed(3)}s off the recorded race`
+                : isFaster ? `${absDiff.toFixed(3)}s FASTER!` : `${absDiff.toFixed(3)}s slower`}
         </span>
         <p className="text-gray-400 text-sm mt-1">
-          {samePlan
-            ? `This is ${driver}'s strategy. The gap is the pit model, not a different plan.`
-            : isFaster ? 'Your strategy would have beaten the actual result!' : 'The actual strategy was better this time.'}
+          {!hasComparison
+            ? 'There are no timed laps to compare this plan with.'
+            : samePlan && closeFit
+              ? `This is ${driver}'s strategy. The model lines up with the laps he recorded.`
+              : samePlan
+                ? `This is ${driver}'s strategy. That gap is the model fit, not a different plan.`
+                : isFaster ? 'Your strategy would have beaten the actual result!' : 'The actual strategy was better this time.'}
         </p>
       </div>
 
@@ -141,7 +150,7 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
       </div>
 
       {/* Per-Stint Breakdown */}
-      {stint_analysis && stint_analysis.length > 0 && (
+      {hasComparison && stint_analysis && stint_analysis.length > 0 && (
         <div className="mb-6">
           <h4 className="text-sm font-display font-semibold text-gray-300 mb-3">Per-Stint Breakdown</h4>
           <div className="space-y-2">
@@ -203,9 +212,17 @@ export default function ResultsSummary({ simulation, stints, driver, onApplySugg
                   </div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-gray-400 text-xs font-mono">{formatRaceTime(suggestion.total_time)}</span>
-                    <span className={`text-xs font-mono font-bold ${isGain ? 'text-green-400' : 'text-red-400'}`}>
-                      {isGain ? '-' : '+'}{absDelta.toFixed(1)}s vs actual
-                    </span>
+                    {hasComparison ? (
+                      absDelta < 0.05 ? (
+                        <span className="text-xs font-mono text-gray-400">ties the race</span>
+                      ) : (
+                        <span className={`text-xs font-mono font-bold ${isGain ? 'text-green-400' : 'text-red-400'}`}>
+                          {isGain ? '-' : '+'}{absDelta.toFixed(1)}s vs actual
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-xs font-mono text-gray-500">no recorded time</span>
+                    )}
                   </div>
                   {onApplySuggestion && (
                     <button

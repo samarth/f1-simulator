@@ -13,11 +13,3 @@ export const COMPOUND_OPTIONS = [
   { value: 'MEDIUM', label: 'Medium' },
   { value: 'HARD', label: 'Hard' },
 ];
-
-export const SESSION_OPTIONS = [
-  { value: 'R', label: 'Race' },
-  { value: 'Q', label: 'Qualifying' },
-  { value: 'FP3', label: 'Practice 3' },
-  { value: 'FP2', label: 'Practice 2' },
-  { value: 'FP1', label: 'Practice 1' },
-];

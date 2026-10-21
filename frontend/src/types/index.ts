@@ -53,6 +53,7 @@ export interface FuelEffect {
 export interface ModelInfo {
   observed_compounds: string[];
   unmodeled_compounds: string[];
+  left_out_note?: string;
   pace_note: string;
   fuel_source: string;
   fuel_corrected: boolean;
