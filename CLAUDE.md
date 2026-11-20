@@ -72,7 +72,7 @@ Fuel-corrected linear tire model. Fuel is estimated when a driver runs one compo
 
 Compounds with fewer than 10 clean laps are left unmodelled. Nothing is invented for a missing compound. A dry pace order that disagrees with soft-medium-hard by more than about 0.15s is reported and left as measured.
 
-Pit loss is the extra time of an in-lap plus the following out-lap versus two racing laps, kept in a 10–40s band. Stationary-only pit durations (~2.5s) and red-flag outliers are not mixed into that number. The loss is added once, on the in-lap. The out-lap is a racing lap.
+Pit loss is the extra time of an in-lap plus the following out-lap versus two racing laps, kept in a 10–40s band. Stationary-only pit durations (~2.5s) and red-flag outliers are not mixed into that number. The loss is added once, on the out-lap, which is where the recorded lap time carries it. The in-lap stays a racing lap.
 
 Safety-car, virtual-safety-car, and red-flag laps use the recorded time. Replaying a driver's own stints anchors green-lap pace to that driver, so the timed-lap total should land within a few seconds of the race. Green-lap RMSE is the scatter around the fit. Pit laps in the replay keep the recorded time.
 

@@ -1,32 +1,17 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { fetchRaces, fetchYears } from '../api';
 import type { RaceInfo } from '../types';
-
-interface SessionContextValue {
-  year: number;
-  setYear: (y: number) => void;
-  race: string;
-  setRace: (r: string) => void;
-  session: string;
-  setSession: (s: string) => void;
-  races: RaceInfo[];
-  years: number[];
-  loadingRaces: boolean;
-  loadingYears: boolean;
-  scheduleError: string;
-}
-
-const SessionContext = createContext<SessionContextValue | null>(null);
+import { SessionContext } from './sessionContext';
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [year, setYear] = useState(0);
   const [race, setRace] = useState('');
-  const [session, setSession] = useState('R');
   const [races, setRaces] = useState<RaceInfo[]>([]);
   const [years, setYears] = useState<number[]>([]);
   const [loadingRaces, setLoadingRaces] = useState(false);
   const [loadingYears, setLoadingYears] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
+  const initialRace = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,16 +19,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     fetchYears()
       .then((data) => {
         if (cancelled) return;
-        setYears(data);
+        const seasons = data.years;
+        setYears(seasons);
         setScheduleError('');
-        if (data.length > 0) {
-          setYear((current) => (data.includes(current) ? current : data[0]));
+        if (data.default_race) initialRace.current = data.default_race;
+        const thisYear = new Date().getUTCFullYear();
+        const preferred = data.default_year && seasons.includes(data.default_year)
+          ? data.default_year
+          : seasons.find((season) => season <= thisYear);
+        if (preferred) {
+          setYear((current) => (seasons.includes(current) && current !== 0 ? current : preferred));
         }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         const message = e instanceof Error ? e.message : 'Could not load seasons.';
         setScheduleError(message);
+        setYears([]);
       })
       .finally(() => { if (!cancelled) setLoadingYears(false); });
     return () => { cancelled = true; };
@@ -59,10 +51,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setRaces(data);
         setScheduleError('');
         setRace((current) => {
-          if (data.length > 0 && !data.some((r) => r.name === current)) {
-            return data[0].name;
+          if (current && data.some((r) => r.name === current)) return current;
+          const preferred = initialRace.current;
+          if (preferred && data.some((r) => r.name === preferred)) {
+            initialRace.current = null;
+            return preferred;
           }
-          return current;
+          const today = new Date().toISOString().slice(0, 10);
+          const completed = data.filter((r) => r.date && r.date <= today);
+          if (completed.length > 0) return completed[completed.length - 1].name;
+          return data[0]?.name ?? '';
         });
       })
       .catch((e: unknown) => {
@@ -82,8 +80,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setYear,
         race,
         setRace,
-        session,
-        setSession,
         races,
         years,
         loadingRaces,
@@ -94,10 +90,4 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       {children}
     </SessionContext.Provider>
   );
-}
-
-export function useSession() {
-  const ctx = useContext(SessionContext);
-  if (!ctx) throw new Error('useSession must be used within SessionProvider');
-  return ctx;
 }

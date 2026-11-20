@@ -467,6 +467,23 @@ def green_rmse(
     return float(np.sqrt(np.mean(np.square(errors))))
 
 
+def with_opening_tyre_age(stints: list[dict], compound: str | None, age: int) -> list[dict]:
+    """Use the tires the car actually started on when the plan starts on that compound.
+
+    The age is omitted, not zero, when the caller did not choose one. A plan
+    that starts on a different compound is a fresh set.
+    """
+    copied = [dict(stint) for stint in stints]
+    if not copied or not compound or age <= 0:
+        return copied
+    if copied[0].get("start_tyre_age") is not None:
+        return copied
+    if copied[0].get("compound") != compound:
+        return copied
+    copied[0]["start_tyre_age"] = int(age)
+    return copied
+
+
 def simulate_strategy(
     models: dict,
     stints: list[dict],
@@ -477,18 +494,21 @@ def simulate_strategy(
     neutral_times: dict[int, float] | None = None,
     field_pace: dict[int, float] | None = None,
 ) -> list[dict]:
-    """One racing lap per planned lap. Pit loss is added once, on the in-lap.
+    """One racing lap per planned lap. Pit loss is added once, on the out-lap.
 
-    Neutralised laps (safety car and similar) use the recorded field time,
-    because the strategy does not change them.
+    The loss is the extra time of the in-lap and the out-lap together. The
+    recorded lap that carries it is the out-lap, so the model adds it there
+    and leaves the in-lap as a racing lap. Neutralised laps use the recorded
+    time and are not charged again.
     """
     neutral_times = neutral_times or {}
     results = []
     current_lap = 1
+    pending_pit = 0.0
     for stint_index, stint in enumerate(stints):
         compound = stint["compound"]
         num_laps = int(stint["laps"])
-        age = int(stint.get("start_tyre_age", 0))
+        age = int(stint.get("start_tyre_age") or 0)
         for lap_in_stint in range(num_laps):
             tyre_life = age + lap_in_stint + 1
             is_pit = lap_in_stint == num_laps - 1 and stint_index < len(stints) - 1
@@ -497,13 +517,17 @@ def simulate_strategy(
                 # again; the recorded lap already contains whatever happened.
                 lap_time = float(neutral_times[current_lap])
                 neutral = True
+                pending_pit = 0.0
             else:
                 lap_time = estimate_lap_time(
                     models, compound, tyre_life, current_lap, total_laps, fuel_per_lap, driver_offset, field_pace
                 )
                 neutral = False
+                if pending_pit:
+                    lap_time += pending_pit
+                    pending_pit = 0.0
                 if is_pit:
-                    lap_time += pit_loss
+                    pending_pit = float(pit_loss)
             results.append(
                 {
                     "lap": current_lap,
@@ -515,6 +539,8 @@ def simulate_strategy(
                 }
             )
             current_lap += 1
+    if pending_pit and results and not results[-1]["neutral"]:
+        results[-1]["time_sec"] += pending_pit
     return results
 
 
@@ -719,6 +745,8 @@ def find_optimal_strategies(
     mixed: bool = False,
     field_pace: dict[int, float] | None = None,
     max_stint: dict[str, int] | None = None,
+    opening_compound: str | None = None,
+    opening_age: int = 0,
 ) -> dict:
     """Best 1-stop, 2-stop, and 3-stop plans on observed compounds only.
 
@@ -741,6 +769,7 @@ def find_optimal_strategies(
             return
         if max_stint and not stint_respects_length(stints, max_stint):
             return
+        stints = with_opening_tyre_age(stints, opening_compound, opening_age)
         laps = simulate_strategy(
             models, stints, pit_loss, n, fuel_per_lap, driver_offset, neutral_times, field_pace
         )

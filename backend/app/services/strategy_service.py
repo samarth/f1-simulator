@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from .strategy_math import (
@@ -223,7 +224,8 @@ def get_weather_data(session) -> dict:
         }
 
     air_temp = weather["AirTemp"].mean() if "AirTemp" in weather.columns else None
-    track_temp = weather["TrackTemp"].mean() if "TrackTemp" in weather.columns else None
+    track_temps = _usable_track_temps(weather["TrackTemp"]) if "TrackTemp" in weather.columns else []
+    track_temp = float(np.mean(track_temps)) if track_temps else None
     humidity = weather["Humidity"].mean() if "Humidity" in weather.columns else None
     rainfall = bool(weather["Rainfall"].max() > 0) if "Rainfall" in weather.columns else False
     wind_speed = weather["WindSpeed"].mean() if "WindSpeed" in weather.columns else None
@@ -250,9 +252,30 @@ def get_weather_data(session) -> dict:
         "rainfall": rainfall,
         "wind_speed": _round(wind_speed),
         "conditions": conditions,
-        "track_temp_min": _round(weather["TrackTemp"].min()) if "TrackTemp" in weather.columns else None,
-        "track_temp_max": _round(weather["TrackTemp"].max()) if "TrackTemp" in weather.columns else None,
+        "track_temp_min": _round(min(track_temps)) if track_temps else None,
+        "track_temp_max": _round(max(track_temps)) if track_temps else None,
     }
+
+
+def _usable_track_temps(values) -> list[float]:
+    """Drop missing and non-physical track readings.
+
+    A 0°C sample in a race whose air temperature is around 30°C is a dead
+    sensor, and it should not set the displayed minimum.
+    """
+    clean = []
+    for value in values:
+        if value is None or pd.isna(value):
+            continue
+        number = float(value)
+        if number <= 0:
+            continue
+        clean.append(number)
+    if len(clean) < 3:
+        return clean
+    median = float(np.median(clean))
+    plausible = [value for value in clean if value >= median - 20]
+    return plausible or clean
 
 
 def get_driver_actual_strategy(session, driver: str) -> dict | None:
@@ -412,6 +435,7 @@ def analyze_stints(
         if actual_count == 0:
             continue
         delta = user_time - actual_time
+        same_stint = _same_as_raced_stint(actual, stint["compound"], start_lap, end_lap)
         results.append(
             {
                 "stint": index + 1,
@@ -419,11 +443,31 @@ def analyze_stints(
                 "laps": count,
                 "delta": round(delta, 3),
                 "explanation": _explain_stint(
-                    models, stint["compound"], count, delta, actual, start_lap, end_lap, index, user_stints
+                    models,
+                    stint["compound"],
+                    count,
+                    delta,
+                    actual,
+                    start_lap,
+                    end_lap,
+                    index,
+                    user_stints,
+                    same_stint,
                 ),
             }
         )
     return results
+
+
+def _same_as_raced_stint(actual: dict, compound: str, start_lap: int, end_lap: int) -> bool:
+    for stint in actual.get("stints") or []:
+        if (
+            stint.get("compound") == compound
+            and int(stint.get("start_lap", -1)) == start_lap
+            and int(stint.get("end_lap", -1)) == end_lap
+        ):
+            return True
+    return False
 
 
 def _explain_stint(
@@ -436,8 +480,17 @@ def _explain_stint(
     end_lap: int,
     stint_idx: int,
     user_stints: list[dict],
+    same_stint: bool = False,
 ) -> str:
     abs_delta = abs(delta)
+    if same_stint and abs_delta < 1.0:
+        return "Same stint as the race."
+    if same_stint:
+        direction = "faster" if delta < 0 else "slower"
+        return (
+            f"Same stint as the race. The model is {abs_delta:.1f}s {direction} "
+            "than the laps he recorded."
+        )
     model = models.get(compound, {})
     deg_rate = model.get("deg_rate", 0.04)
     late_deg = deg_rate * num_laps
@@ -477,11 +530,30 @@ def _explain_stint(
     return f"Gained {abs_delta:.1f}s vs actual — strong stint!"
 
 
+def left_out_note(race_model: dict) -> str:
+    """Say when a compound the race could have used was not fitted."""
+    missing: list[str] = []
+    if not race_model["wet"]:
+        for compound in ("SOFT", "MEDIUM", "HARD"):
+            if compound not in race_model["models"]:
+                missing.append(compound)
+    for compound in race_model["unmodeled"]:
+        if compound not in missing:
+            missing.append(compound)
+    if not missing:
+        return ""
+    if len(missing) == 1:
+        return f"{missing[0]} is left out because there are not enough clean laps to fit it."
+    names = ", ".join(missing)
+    return f"{names} are left out because there are not enough clean laps to fit them."
+
+
 def model_info(race_model: dict) -> dict:
     observed = race_model["observed"]
     return {
         "observed_compounds": observed,
         "unmodeled_compounds": race_model["unmodeled"],
+        "left_out_note": left_out_note(race_model),
         "pace_note": race_model["pace_note"],
         "fuel_source": race_model["fuel_source"],
         "fuel_corrected": True,

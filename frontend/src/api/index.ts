@@ -9,6 +9,16 @@ import type {
 
 const BASE = '/api';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function errorMessage(res: Response): Promise<string> {
   const body = await res.json().catch(() => ({}));
   const detail = body?.detail;
@@ -25,14 +35,15 @@ async function errorMessage(res: Response): Promise<string> {
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(await errorMessage(res));
+    throw new ApiError(await errorMessage(res), res.status);
   }
   return res.json();
 }
 
 export async function fetchYears() {
-  const data = await fetchJson<{ years: number[] }>(`${BASE}/years`);
-  return data.years;
+  return fetchJson<{ years: number[]; default_year?: number | null; default_race?: string | null }>(
+    `${BASE}/years`
+  );
 }
 
 export async function fetchRaces(year: number) {
@@ -42,9 +53,9 @@ export async function fetchRaces(year: number) {
   return data.races;
 }
 
-export async function fetchDrivers(year: number, race: string, session: string) {
+export async function fetchDrivers(year: number, race: string) {
   const data = await fetchJson<{ drivers: DriverInfo[] }>(
-    `${BASE}/drivers?year=${year}&race=${encodeURIComponent(race)}&session=${session}`
+    `${BASE}/drivers?year=${year}&race=${encodeURIComponent(race)}`
   );
   return data.drivers;
 }
@@ -83,7 +94,7 @@ export async function postSimulate(
     body: JSON.stringify({ year, race, driver, stints }),
   });
   if (!res.ok) {
-    throw new Error(await errorMessage(res));
+    throw new ApiError(await errorMessage(res), res.status);
   }
   return res.json();
 }

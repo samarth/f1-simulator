@@ -57,6 +57,7 @@ class ActualStrategyResponse(BaseModel):
 class StintInput(BaseModel):
     compound: str
     laps: int
+    start_tyre_age: int | None = None
 
 
 class SimulateRequest(BaseModel):
